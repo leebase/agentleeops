@@ -32,3 +32,10 @@ htmlcov/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local artifacts (per-project designs go in ~/projects/<dirname>/)
+DESIGN.md
+webhook_server.log
+screenshots/
+handoff.md
+h

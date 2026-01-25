@@ -48,9 +48,13 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
 - `webhook_server.py`: Webhook-based trigger (HTTP server).
 - `setup-board.py`: One-time Kanboard column initialization.
 - `agents/`: Agent implementations (only `architect.py` is real today).
-- `lib/`: Shared utilities (workspace management, LLM wrapper).
+- `lib/`: Shared utilities:
+  - `task_fields.py`: Task field handling via metadata API with YAML fallback.
+  - `workspace.py`: Workspace creation and management.
+  - `opencode.py`: LLM wrapper (OpenCode CLI or OpenRouter fallback).
 - `prompts/`: Prompt templates (e.g., `design_prompt.txt`).
 - `product-definition.md`: Authoritative spec for workflow rules.
+- `sprintPlan.md`: Persistent sprint tracker for progress visibility.
 - `CLAUDE.md`: Additional operating constraints for assistants.
 
 ## Workflow Rules (Non-Negotiable)
@@ -59,8 +63,8 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
   explicitly moving the Kanboard card back to an earlier column.
 - Double-Blind Rule: code-writing agent (Ralph) never writes tests.
 - Test Integrity: do not modify `tests/` unless the card is in column 4.
-- Artifacts over Chat: durable decisions belong in `DESIGN-{task_id}.md`
-  and `prd-{task_id}.json`, not transient conversation.
+- Artifacts over Chat: durable decisions belong in `DESIGN.md`
+  and `prd.json`, not transient conversation.
 
 ## Agent Triggers
 
@@ -122,6 +126,43 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
 - Kanboard columns must match names in `TRIGGERS`.
 - Tagging in Kanboard uses `design-started`, `design-generated`, etc.
 
+## Task Custom Fields (MetaMagik)
+
+Tasks use custom fields via the MetaMagik plugin. The `lib/task_fields.py` module handles field retrieval with automatic fallback to YAML parsing for backwards compatibility.
+
+### User-Editable Fields
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `dirname` | Text | Yes | - |
+| `context_mode` | Dropdown | No | "NEW" |
+| `acceptance_criteria` | Textarea | No | "" |
+| `complexity` | Dropdown | No | - |
+
+### Agent-Managed Fields (Read-Only)
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `agent_status` | pending, running, completed, failed | Current agent execution status |
+| `current_phase` | design, scaffold, planning, coding | Which agent phase is active |
+
+### API Usage
+
+```python
+from lib.task_fields import get_task_fields, update_status, TaskFieldError
+
+# Get fields (metadata API or YAML fallback)
+try:
+    fields = get_task_fields(kb_client, task_id)
+    dirname = fields["dirname"]
+    context_mode = fields.get("context_mode", "NEW")
+except TaskFieldError as e:
+    print(f"Error: {e}")
+
+# Update agent status
+update_status(kb_client, task_id, agent_status="running", current_phase="design")
+```
+
 ## Environment Variables
 
 - `KANBOARD_URL`: Kanboard JSON-RPC endpoint (default `http://localhost:88/jsonrpc.php`).
@@ -142,8 +183,8 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
 
 ## Artifact Naming
 
-- `DESIGN-{task_id}.md`: Design artifact (written to workspace, attached to card).
-- `prd-{task_id}.json`: Planning artifact (future).
+- `DESIGN.md`: Design artifact (written to workspace, attached to card).
+- `prd.json`: Planning artifact (future).
 
 ## Contribution Guidelines for Agents
 

@@ -12,13 +12,13 @@ Usage:
 
 import argparse
 import os
-import re
 import sys
 import time
-from pathlib import Path
 
 from dotenv import load_dotenv
 from kanboard import Client
+
+from lib.task_fields import get_task_fields, update_status, TaskFieldError
 
 # Load environment variables from .env file
 load_dotenv()
@@ -69,60 +69,6 @@ def connect_kb():
     except Exception as e:
         print(f"Connection Failed: {e}")
         sys.exit(1)
-
-
-def parse_card_description(description: str) -> dict:
-    """
-    Parse YAML-style card description.
-
-    Expected format:
-        dirname: my-project-name
-        context_mode: NEW
-        acceptance_criteria: |
-          - Condition 1
-          - Condition 2
-    """
-    data = {}
-    if not description:
-        return data
-
-    # Parse dirname
-    dirname_match = re.search(r'dirname:\s*(.+)', description)
-    if dirname_match:
-        data['dirname'] = dirname_match.group(1).strip()
-
-    # Parse context_mode
-    mode_match = re.search(r'context_mode:\s*(.+)', description)
-    if mode_match:
-        data['context_mode'] = mode_match.group(1).strip().upper()
-
-    # Parse acceptance_criteria (multiline)
-    # Look for "acceptance_criteria:" followed by a pipe or content
-    ac_match = re.search(
-        r'acceptance_criteria:\s*\|?\s*\n((?:[ \t]+.+\n?)+)',
-        description,
-        re.MULTILINE
-    )
-    if ac_match:
-        # Dedent the criteria
-        criteria = ac_match.group(1)
-        # Remove common leading whitespace
-        lines = criteria.split('\n')
-        if lines:
-            # Find minimum indentation
-            min_indent = float('inf')
-            for line in lines:
-                if line.strip():
-                    indent = len(line) - len(line.lstrip())
-                    min_indent = min(min_indent, indent)
-            if min_indent < float('inf'):
-                criteria = '\n'.join(
-                    line[min_indent:] if len(line) > min_indent else line.strip()
-                    for line in lines
-                )
-        data['acceptance_criteria'] = criteria.strip()
-
-    return data
 
 
 def get_task_tags(kb, task_id: int) -> list:
@@ -186,17 +132,17 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
         print(f"  Task #{task_id} already in progress (has {agent_tags['started']} tag)")
         return False
 
-    # Parse card
-    context = parse_card_description(desc)
-    dirname = context.get('dirname')
-    context_mode = context.get('context_mode', 'NEW')
-    acceptance_criteria = context.get('acceptance_criteria', '')
-
-    if not dirname:
-        print(f"  Error: Task #{task_id} missing 'dirname' in description")
+    # Get task fields (metadata API or YAML fallback)
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+        context_mode = fields.get("context_mode", "NEW")
+        acceptance_criteria = fields.get("acceptance_criteria", "")
+    except TaskFieldError as e:
+        print(f"  Error: {e}")
         kb.create_comment(
             task_id=task_id,
-            content="**ARCHITECT_AGENT Error**\n\nMissing `dirname` in card description."
+            content=f"**ARCHITECT_AGENT Error**\n\n{e}"
         )
         return False
 
@@ -204,8 +150,9 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
     print(f"    dirname: {dirname}")
     print(f"    context_mode: {context_mode}")
 
-    # Mark as started
+    # Mark as started (tag + metadata)
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="design")
 
     # Run architect agent
     result = run_architect_agent(
@@ -219,11 +166,13 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
     )
 
     if result["success"]:
-        # Mark as completed
+        # Mark as completed (tag + metadata)
         add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="design")
         print(f"  Success: DESIGN.md written to {result['design_path']}")
         return True
     else:
+        update_status(kb, task_id, agent_status="failed", current_phase="design")
         print(f"  Failed: {result['error']}")
         return False
 

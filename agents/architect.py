@@ -133,8 +133,8 @@ def run_architect_agent(
         post_comment(f"**ARCHITECT_AGENT Failed**\n\n{result['error']}")
         return result
 
-    # Step 4: Write DESIGN-{task_id}.md (each story gets its own design file)
-    design_filename = f"DESIGN-{task_id}.md"
+    # Step 4: Write DESIGN.md (each project has its own workspace directory)
+    design_filename = "DESIGN.md"
     design_path = workspace / design_filename
     try:
         with open(design_path, 'w') as f:

@@ -21,12 +21,39 @@ cp .env.example .env
 ### Prerequisites
 
 1. **Kanboard** running on Docker port 88
-2. **OpenCode CLI** installed and connected:
+2. **MetaMagik Plugin** installed for custom fields (see below)
+3. **OpenCode CLI** installed and connected:
    ```bash
    # Verify OpenCode CLI
    opencode --version
    ```
    - Run `/connect` inside OpenCode and select GPT 5.2 Codex
+
+### MetaMagik Plugin Installation
+
+The MetaMagik plugin adds custom field UI to Kanboard task forms.
+
+```bash
+# Install plugin in Kanboard container
+docker exec -it kanboard sh
+cd /var/www/app/plugins
+git clone https://github.com/creecros/MetaMagik.git
+chown -R nginx:nginx MetaMagik
+exit
+```
+
+After installation, configure custom fields in **Settings > Custom Fields**:
+
+| Field Name | Type | Required | Notes |
+|------------|------|----------|-------|
+| `dirname` | Text | Yes | lowercase, digits, dashes only |
+| `context_mode` | Dropdown | No | Options: "NEW", "FEATURE" (default: NEW) |
+| `acceptance_criteria` | Textarea | No | Multi-line acceptance criteria |
+| `complexity` | Dropdown | No | Options: "S", "M", "L", "XL" |
+
+Status fields (agent-managed, read-only):
+- `agent_status`: "pending", "running", "completed", "failed"
+- `current_phase`: "design", "scaffold", "planning", "coding"
 
 ## Running the System
 
@@ -75,11 +102,11 @@ python orchestrator.py --poll-interval 10
 | Column | Owner | Artifact |
 |--------|-------|----------|
 | 1. Inbox | Lee | Story card |
-| 2. Design Draft | Agent | `DESIGN-{task_id}.md` |
+| 2. Design Draft | Agent | `DESIGN.md` |
 | 3. Design Approved | Lee | Approval gate |
 | 4. Repo & Tests Draft | Agent | Repo + `tests/*.py` (must FAIL) |
 | 5. Tests Approved | Lee | Approval gate |
-| 6. Planning Draft | Agent | `prd-{task_id}.json` |
+| 6. Planning Draft | Agent | `prd.json` |
 | 7. Plan Approved | Lee | Approval gate |
 | 8. Ralph Loop | Ralph | Source code (tests must PASS) |
 | 9. Final Review | Lee | PR/Diff |
@@ -106,11 +133,28 @@ The orchestrator triggers agents based on column:
 
 3. **Test Integrity (Non-Negotiable)**: Agents must not modify `tests/` unless Lee explicitly moves the card back to Column 4. This prevents "making tests pass by changing the tests."
 
-4. **Artifacts over Chat**: All durable decisions live in version-controlled files (`DESIGN-{task_id}.md`, `prd-{task_id}.json`), not chat.
+4. **Artifacts over Chat**: All durable decisions live in version-controlled files (`DESIGN.md`, `prd.json`), not chat.
 
 ## Card Input Contract
 
-Cards use YAML-style description:
+### Preferred: Custom Fields (MetaMagik)
+
+With the MetaMagik plugin installed, create tasks using the custom field UI:
+
+1. Click "+" to create a new task in Kanboard
+2. Fill in the custom fields:
+   - **dirname** (required): Project directory name
+   - **context_mode**: "NEW" or "FEATURE"
+   - **acceptance_criteria**: Multi-line acceptance criteria
+   - **complexity**: S, M, L, or XL
+3. Save the task
+
+The system reads these fields via Kanboard's metadata API.
+
+### Legacy: YAML Description (Fallback)
+
+For backwards compatibility, the system also supports YAML in the description:
+
 ```yaml
 dirname: my-project-name
 context_mode: NEW  # or FEATURE
@@ -119,11 +163,16 @@ acceptance_criteria: |
   - Condition 2
 ```
 
-**dirname naming rules**: lowercase, digits and dashes only, no spaces, no leading dot, no slashes, no periods.
+### dirname Naming Rules
+
+- Lowercase letters, digits, and dashes only
+- Cannot start with a dash or dot
+- No spaces, slashes, or periods
 
 ## Key Files
 
 - `product-definition.md`: Authoritative specification (source of truth)
+- `sprintPlan.md`: Persistent sprint tracker (progress visibility for humans and agents)
 - `requirements.txt`: Dependencies (kanboard, python-dotenv)
 - `orchestrator.py`: Orchestrator entry point
 - `webhook_server.py`: Webhook server for automatic triggers
@@ -133,12 +182,13 @@ acceptance_criteria: |
 
 ### Library Modules (`lib/`)
 
+- `lib/task_fields.py`: Task field handling via metadata API with YAML fallback
 - `lib/workspace.py`: Workspace creation and management (NEW/FEATURE modes)
 - `lib/opencode.py`: OpenCode CLI wrapper for LLM calls (named opencode.py for historical reasons)
 
 ### Agents (`agents/`)
 
-- `agents/architect.py`: ARCHITECT_AGENT - generates DESIGN-{task_id}.md from story cards
+- `agents/architect.py`: ARCHITECT_AGENT - generates DESIGN.md from story cards
 
 ### Prompts (`prompts/`)
 
@@ -167,55 +217,40 @@ The orchestrator uses tags to track processing state:
 
 ## Artifact Naming Convention
 
-Each story/task gets its own artifact files named with the task ID:
-- `DESIGN-{task_id}.md` - Design document
-- `prd-{task_id}.json` - Planning document (future)
+Each project workspace has standard artifact files:
+- `DESIGN.md` - Design document
+- `prd.json` - Planning document (future)
 
 Artifacts are:
 1. Written to the workspace (`~/projects/<dirname>/`)
 2. Attached to the Kanboard task
 
-## Current Status (as of last session)
+## Current Status
 
-### What Works
+See `sprintPlan.md` for detailed sprint tracking.
+
+### What Works (Sprint 1 Complete)
 - `setup-board.py`: Creates 10-column Kanboard workflow
 - `orchestrator.py --once`: Manual single-run mode
-- `ARCHITECT_AGENT`: Generates DESIGN-{task_id}.md using Claude CLI
-- Workspace creation (NEW mode)
-- File attachment to Kanboard tasks
-- `webhook_server.py`: Receives webhooks from Kanboard
+- `webhook_server.py`: Webhook-triggered automation (recommended)
+- **MetaMagik custom fields**: dirname, context_mode, acceptance_criteria, complexity
+- `lib/task_fields.py`: Metadata API with YAML fallback
+- **ARCHITECT_AGENT**: Full end-to-end flow:
+  - Triggers on card move to "2. Design Draft"
+  - Creates workspace at `~/projects/<dirname>/`
+  - Generates DESIGN.md via LLM
+  - Attaches file to Kanboard task
+  - Posts status comment
 
 ### What Needs Work
-1. **Webhook column detection**: The webhook server receives events but needs to look up column names from column IDs (partially implemented, needs testing)
-2. **SCAFFOLD_AGENT**: Not implemented (stub only)
-3. **PM_AGENT**: Not implemented (stub only)
-4. **RALPH_CODER**: Not implemented (stub only)
-5. **FEATURE mode**: Branch creation not fully tested
-6. **Tag management**: Kanboard tag API has permission issues with jsonrpc user
+1. **SCAFFOLD_AGENT**: Not implemented (stub only) - Sprint 2
+2. **PM_AGENT**: Not implemented (stub only) - Sprint 3
+3. **RALPH_CODER**: Not implemented (stub only) - Sprint 4
+4. **FEATURE mode**: Branch creation not fully tested - Sprint 5
 
 ## Next Steps
 
-### Immediate (to complete webhook flow)
-1. Test webhook server with card move to "2. Design Draft"
-2. Verify ARCHITECT_AGENT triggers automatically
-3. Debug any issues with column name lookup
-
-### Phase 2 - Scaffold Agent
-1. Create `agents/scaffold.py`
-2. Create `prompts/scaffold_prompt.txt`
-3. Implement: Create test files that FAIL
-4. Wire up to Column 4 trigger
-
-### Phase 3 - PM Agent
-1. Create `agents/pm.py`
-2. Create `prompts/planning_prompt.txt`
-3. Implement: Generate `prd-{task_id}.json`
-4. Wire up to Column 6 trigger
-
-### Phase 4 - Ralph Coder
-1. Create `agents/ralph.py`
-2. Implement: Write code to make tests PASS
-3. Wire up to Column 8 trigger
+See `sprintPlan.md` for prioritized sprint backlog.
 
 ## Testing the Current Implementation
 
@@ -223,21 +258,23 @@ Artifacts are:
 # 1. Start webhook server
 source .venv/bin/activate
 python -u webhook_server.py --port 5000
-
-# 2. In Kanboard (http://localhost:88):
-#    - Go to AgentLeeOps project
-#    - Create card in "1. Inbox" with:
-#      dirname: test-project
-#      context_mode: NEW
-#      acceptance_criteria: |
-#        - Feature A
-#        - Feature B
-#    - Drag card to "2. Design Draft"
-
-# 3. Check webhook server output for trigger
-# 4. Verify ~/projects/test-project/DESIGN-{task_id}.md created
-# 5. Verify file attached to Kanboard task
 ```
+
+In Kanboard (http://localhost:88):
+1. Go to AgentLeeOps project
+2. Click "+" to create a new task in "1. Inbox"
+3. Fill in the custom fields:
+   - **dirname**: `test-project` (required, lowercase/digits/dashes)
+   - **context_mode**: Select "NEW" or "FEATURE"
+   - **acceptance_criteria**: Enter requirements
+   - **complexity**: Select S/M/L/XL
+4. Save and drag card to "2. Design Draft"
+
+Verification:
+- Check webhook server output for trigger message
+- Verify `~/projects/<dirname>/DESIGN.md` created
+- Open task in Kanboard - DESIGN.md should be attached
+- Comment should show "ARCHITECT_AGENT Completed"
 
 ## Troubleshooting
 

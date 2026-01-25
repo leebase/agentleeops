@@ -10,13 +10,22 @@ It will:
 4. Create the standard Tags.
 """
 
+import os
 import sys
+from dotenv import load_dotenv
 from kanboard import Client
 
+# Load environment variables
+load_dotenv()
+
 # --- CONFIGURATION ---
-KB_URL = "http://localhost:88/jsonrpc.php"
-KB_USER = "jsonrpc"
-KB_TOKEN = "REMOVED_API_KEY"  # <--- PASTE YOUR TOKEN
+KB_URL = os.getenv("KANBOARD_URL", "http://localhost:88/jsonrpc.php")
+KB_USER = os.getenv("KANBOARD_USER", "jsonrpc")
+KB_TOKEN = os.getenv("KANBOARD_TOKEN")
+
+if not KB_TOKEN:
+    print("Error: KANBOARD_TOKEN not set in .env file")
+    sys.exit(1)
 
 PROJECT_NAME = "AgentLeeOps"
 

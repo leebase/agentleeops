@@ -21,6 +21,8 @@ from typing import Any, cast
 from dotenv import load_dotenv
 from kanboard import Client
 
+from lib.task_fields import get_task_fields, update_status, TaskFieldError
+
 load_dotenv()
 
 
@@ -104,45 +106,6 @@ def add_task_tag(kb, project_id: int, task_id: int, tag_name: str):
         print(f"  Warning: Could not add tag '{tag_name}': {e}")
 
 
-def parse_card_description(description: str) -> dict:
-    """Parse YAML-style card description."""
-    import re
-    data = {}
-    if not description:
-        return data
-
-    dirname_match = re.search(r'dirname:\s*(.+)', description)
-    if dirname_match:
-        data['dirname'] = dirname_match.group(1).strip()
-
-    mode_match = re.search(r'context_mode:\s*(.+)', description)
-    if mode_match:
-        data['context_mode'] = mode_match.group(1).strip().upper()
-
-    ac_match = re.search(
-        r'acceptance_criteria:\s*\|?\s*\n((?:[ \t]+.+\n?)+)',
-        description,
-        re.MULTILINE
-    )
-    if ac_match:
-        criteria = ac_match.group(1)
-        lines = criteria.split('\n')
-        if lines:
-            min_indent = float('inf')
-            for line in lines:
-                if line.strip():
-                    indent = len(line) - len(line.lstrip())
-                    min_indent = min(min_indent, indent)
-            if min_indent < float('inf'):
-                criteria = '\n'.join(
-                    line[min_indent:] if len(line) > min_indent else line.strip()
-                    for line in lines
-                )
-        data['acceptance_criteria'] = criteria.strip()
-
-    return data
-
-
 def process_design_draft(task_id: int, project_id: int):
     """Process a task that landed in Design Draft column."""
     from agents.architect import run_architect_agent
@@ -156,7 +119,6 @@ def process_design_draft(task_id: int, project_id: int):
         return
 
     title = task['title']
-    desc = task.get('description', '')
 
     tag_names = get_task_tags(kb, task_id)
 
@@ -168,21 +130,27 @@ def process_design_draft(task_id: int, project_id: int):
         print(f"  Task #{task_id} already in progress, skipping")
         return
 
-    # Parse card
-    context = parse_card_description(desc)
-    dirname = context.get('dirname')
-    context_mode = context.get('context_mode', 'NEW')
-    acceptance_criteria = context.get('acceptance_criteria', '')
-
-    if not dirname:
-        print(f"  Error: Task #{task_id} missing 'dirname' in description")
+    # Get task fields (metadata API or YAML fallback)
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+        context_mode = fields.get("context_mode", "NEW")
+        acceptance_criteria = fields.get("acceptance_criteria", "")
+    except TaskFieldError as e:
+        print(f"  Error: {e}")
+        kb.create_comment(
+            task_id=task_id,
+            content=f"**ARCHITECT_AGENT Error**\n\n{e}"
+        )
         return
 
     print(f"  Processing: {title}")
     print(f"    dirname: {dirname}")
     print(f"    context_mode: {context_mode}")
 
+    # Mark as started (tag + metadata)
     add_task_tag(kb, project_id, task_id, TAGS["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="design")
 
     # Run architect agent
     result = run_architect_agent(
@@ -196,9 +164,12 @@ def process_design_draft(task_id: int, project_id: int):
     )
 
     if result["success"]:
+        # Mark as completed (tag + metadata)
         add_task_tag(kb, project_id, task_id, TAGS["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="design")
         print(f"  Success: {result['design_path']}")
     else:
+        update_status(kb, task_id, agent_status="failed", current_phase="design")
         print(f"  Failed: {result['error']}")
 
 
