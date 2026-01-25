@@ -1,1 +1,2 @@
 kanboard
+python-dotenv

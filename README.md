@@ -94,6 +94,9 @@ See `product-definition.md` for the full, authoritative specification of the wor
   pip install -r requirements.txt
   ```
 
+- Verify OpenCode CLI: `opencode --version`
+- Connect OpenCode to ChatGPT Plus: run `/connect` in OpenCode and select GPT 5.2 Codex
+
 - Run tests with the project’s configured test runner (e.g., `pytest` or Playwright) once the test suite and tooling are wired up.
 
 ## Status

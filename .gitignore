@@ -13,7 +13,9 @@ dist/
 .venv/
 venv/
 ENV/
-.env/
+
+# Environment files
+.env
 
 # Python tooling
 .pytest_cache/
