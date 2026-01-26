@@ -1,4 +1,4 @@
-# AgentLeeOps — Product Definition v1.2 (FINAL)
+# AgentLeeOps — Product Definition v1.3 (Governance Edition)
 
 ## 1. Executive Summary
 
@@ -6,92 +6,52 @@
 
 ## 2. The Core Philosophy
 
-* **The Ratchet Effect:** Agents can draft work, but only **Lee** can approve it. Once approved, the artifact is frozen. Agents cannot regress approved decisions.
-* **The Double-Blind Rule:** The Agent writing the code (**Ralph**) is never the same Agent that wrote the tests.
-* **Context-Reset TDD:** The Ralph Loop always starts with a fresh context window, loading state from Git. This prevents "doom loops" where the agent gets confused by its own previous failed attempts.
-* **Breakdown First:** We break the epic into atomic stories *before* writing tests. This ensures tests are small, specific, and manageable.
+*   **The Ratchet Effect (Governance):** Approval is not just a column; it is a cryptographic lock. Once artifacts (`DESIGN.md`, `tests/`) are approved by Lee, they become **immutable** to agents. Only Lee can unlock them.
+*   **The Double-Blind Rule:** The Agent writing the code (**Ralph**) is never the same Agent that wrote the tests.
+*   **Test Integrity:** Ralph is technically prevented from modifying tests. A "Green Bar" is only valid if the test file hash matches the approved version.
+*   **Artifacts over Chat:** We do not rely on chat logs. We rely on durable files.
 
-### 2.1 Test Integrity Rule (Non-Negotiable)
-Once tests are approved (Column 7), **agents must not modify anything under `tests/`** unless **Lee explicitly moves the card back to Column 6**.
+## 3. The 10-Step Workflow (State Machine)
 
-This prevents the classic failure mode: “the agent made the tests pass by changing the tests.”
+| # | Column | Owner | Artifact | Governance Action |
+|---|---|---|---|---|
+| **1** | Inbox | Lee | Story Card | - |
+| **2** | Design Draft | Architect | `DESIGN.md` | Agent can overwrite |
+| **3** | **Design Approved** | Lee | **(Gate)** | **LOCK** `DESIGN.md` |
+| **4** | Planning Draft | PM | `prd.json` | Agent can overwrite |
+| **5** | **Plan Approved** | Lee | **(Gate)** | **LOCK** `prd.json` + **SPAWN** Children |
+| **6** | Tests Draft | Test Agent | `tests/*.py` | Agent can overwrite |
+| **7** | **Tests Approved** | Lee | **(Gate)** | **LOCK** `tests/*.py` |
+| **8** | Ralph Loop | Ralph | `src/` | **VERIFY** Test Hash + **BAN** Test Edits |
+| **9** | Final Review | Lee | PR/Diff | Manual Merge |
+| **10** | Done | System | Archived | - |
 
-## 3. The "Context Mode" (Greenfield vs. Brownfield)
+## 4. Governance & Safety Mechanisms
 
-Every story must declare its Context Mode to determine how the agent bootstraps the workspace.
+### 4.1 The Ratchet System
+A local manifest `.agentleeops/ratchet.json` tracks the approval state of critical files.
+- **Locked:** File cannot be modified by any agent.
+- **Unlocked:** File is in a "Draft" column.
+- **Enforcement:** `workspace.write_file()` checks this manifest before IO operations.
+
+### 4.2 Ralph's Straitjacket
+To prevent "Cheating" (making tests pass by deleting assertions):
+1.  **Staging Restriction:** Ralph cannot run `git add .`. He must add specific source paths.
+2.  **Diff Check:** Before commit, the system runs `git diff --cached --name-only`. If any file in `tests/` is present, the operation aborts.
+
+### 4.3 Fan-Out Flood Control
+The Spawner Agent enforces a hard limit (default: 20) on the number of child cards generated from a single `prd.json` to prevent runaway API calls or cost explosions.
+
+## 5. The "Context Mode"
 
 | Mode | Trigger | Agent Behavior |
 | --- | --- | --- |
 | **NEW** | `context_mode: NEW` | `mkdir <dirname>`, `git init`, scaffolding. |
-| **FEATURE** | `context_mode: FEATURE` | Uses existing repo at `~/projects/<dirname>`, `git pull`, creates `feat/<story-id>` branch. |
-
-## 4. The 10-Step Workflow (State Machine)
-
-The Kanboard Columns must match this exact flow.
-
-| # | Column Name | Owner | Artifact Produced | Exit Criteria |
-| --- | --- | --- | --- | --- |
-| **1** | **Inbox** | Lee | One-line Story card | Lee moves to Draft. |
-| **2** | **Design Draft** | **Agent** | `DESIGN.md` | Agent updates card. |
-| **3** | **Design Approved** | Lee | **(Approval Gate)** | Lee validates architecture. |
-| **4** | **Planning Draft** | **Agent** | `prd.json` (Atomic Stories) | Story breakdown exists. |
-| **5** | **Plan Approved** | Lee | **(Approval Gate)** | Lee agrees to the plan and **spawns child cards**. |
-| **6** | **Tests Draft** | **Agent** | `tests/*.py` | Tests exist for the specific atomic story and **FAIL**. |
-| **7** | **Tests Approved** | Lee | **(Approval Gate)** | Lee confirms tests measure success. |
-| **8** | **Ralph Loop** | **Ralph** | Source Code (`src/`) | **GREEN BAR** (Tests Pass). |
-| **9** | **Final Review** | Lee | Pull Request / Diff | Lee merges code. |
-| **10** | **Done** | System | Archived Card | N/A |
-
-### 4.1 The "Fan-Out" Pattern (Column 5)
-When the Plan is approved in Column 5:
-1. The **Spawner Agent** reads `prd.json`.
-2. It **duplicates the Epic Card** for each atomic story (to preserve custom field data).
-3. It updates the duplicates with Atomic Story details and links them to the Parent.
-4. The Child Cards appear in Column 6 (Tests Draft).
-5. The Parent Card stays in Column 5 as an anchor.
-
-### 4.2 Definitions
-- **Ralph:** The implementation agent responsible for executing the approved plan, writing code, running tests, committing changes, and iterating until the test suite passes.
-
-## 5. The Card Template (Input Contract)
-
-Every card in the "Inbox" must eventually conform to this YAML-style description before moving to Column 2.
-
-```yaml
-dirname: my-cool-project
-context_mode: NEW  # or FEATURE
-acceptance_criteria: |
-  - Must parse CSV files
-  - Must return JSON output
-  - Must handle empty file error
-```
-
-### 5.1 Naming Rules (Safety Contract)
-
-To avoid filesystem/path issues, dirname must be:
-- lowercase
-- digits and dashes only
-- no spaces
-- no leading dot
-- no slashes
-- no `.`.
+| **FEATURE** | `context_mode: FEATURE` | Uses existing repo, creates `feat/<story-id>` branch. |
 
 ## 6. Technical Stack
 
 - **Control Plane:** Kanboard (Docker on Port 88).
 - **Orchestrator:** Python Script (`orchestrator.py`) polling Port 88.
 - **Agent Engine:** OpenCode (configured with `.opencode/rules.md`).
-- **Verification:** pytest (Backend) / playwright (Frontend).
-
-### 6.1 Git Contract (Standardization)
-
-- **Workspace root:** `~/projects/<dirname>`
-- **Repo ownership:** `leebase/<dirname>`
-- **Branch format:** `feat/<task_id>-<dirname>`
-- **Commit discipline:** incremental commits during loops; squash or merge policy is decided by Lee at Final Review.
-
-## 7. Success Metrics
-
-1. Zero “Green Bar Hallucinations”: Ralph never edits a test file to make it pass.
-2. Clean Git History: Every story results in a squashed, readable commit (or an intentionally reviewed commit series).
-3. Resumability: If the power goes out, the artifacts (`DESIGN.md`, `prd.json`) allow the agent to resume exactly where it left off.
+- **Verification:** pytest (Backend).

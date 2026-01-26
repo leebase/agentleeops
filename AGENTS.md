@@ -1,75 +1,22 @@
 # AgentLeeOps AGENTS Guide
 
 This file orients automated coding agents working in this repository.
-It summarizes how to build, test, and keep code consistent with the
-existing style and workflow rules.
-
-## Quick Commands
-
-### Environment Setup
-- Create a virtualenv: `python -m venv .venv`
-- Activate (bash/zsh): `source .venv/bin/activate`
-- Install dependencies: `pip install -r requirements.txt`
-- Copy env template: `cp .env.example .env` (then set `KANBOARD_TOKEN`)
-- Verify OpenCode CLI: `opencode --version`
-- Connect OpenCode to ChatGPT Plus: run `/connect` in OpenCode and select GPT 5.2 Codex
-- Ensure Kanboard is running (Docker on port 88)
-
-### Board Setup
-- One-time Kanboard column setup: `python setup-board.py`
-
-### Run Core Services
-- Webhook mode (recommended): `python -u webhook_server.py --port 5000`
-- Orchestrator (polling): `python orchestrator.py`
-- Orchestrator (single run): `python orchestrator.py --once`
-- Orchestrator (custom interval): `python orchestrator.py --poll-interval 10`
-
-### Webhook Setup
-- Kanboard Settings > Webhooks
-- URL (no trailing slash): `http://172.17.0.1:5000`
-- Trigger: moving a card to "2. Design Draft"
-
-### Tests
-There is no committed test suite yet. When tests are introduced, prefer
-`pytest` as referenced in `product-definition.md`.
-
-- Run all tests: `pytest`
-- Run a single file: `pytest tests/test_example.py`
-- Run a single test: `pytest tests/test_example.py -k test_name`
-- Run by keyword: `pytest -k "keyword"`
-
-### Linting/Formatting
-No lint/format tooling is configured in the repo. If you add one, document
-the command here and keep it lightweight (ruff/black/mypy are preferred).
-
-## Repository Layout
-
-- `orchestrator.py`: Main daemon/poller (Kanboard triggers).
-- `webhook_server.py`: Webhook-based trigger (HTTP server).
-- `setup-board.py`: One-time Kanboard column initialization.
-- `agents/`: Agent implementations:
-  - `architect.py`: Design generation (Col 2).
-  - `pm.py`: PRD breakdown (Col 4).
-  - `spawner.py`: Fan-out logic (Col 5).
-  - `test_agent.py`: TDD test generation (Col 6).
-  - `ralph.py`: Coding loop (Col 8).
-- `lib/`: Shared utilities:
-  - `task_fields.py`: Task field handling via metadata API with YAML fallback.
-  - `workspace.py`: Workspace creation and management.
-  - `opencode.py`: LLM wrapper (OpenCode CLI or OpenRouter fallback).
-- `prompts/`: Prompt templates (e.g., `design_prompt.txt`).
-- `product-definition.md`: Authoritative spec for workflow rules.
-- `sprintPlan.md`: Persistent sprint tracker for progress visibility.
-- `CLAUDE.md` / `GEMINI.md`: Additional operating constraints for assistants.
 
 ## Workflow Rules (Non-Negotiable)
 
-- Ratchet Effect: approved artifacts must not be regressed without Lee
-  explicitly moving the Kanboard card back to an earlier column.
-- Double-Blind Rule: code-writing agent (Ralph) never writes tests.
-- Test Integrity: do not modify `tests/` unless the card is in column 4.
-- Artifacts over Chat: durable decisions belong in `DESIGN.md`
-  and `prd.json`, not transient conversation.
+1.  **Ratchet Effect:**
+    -   Check `.agentleeops/ratchet.json` before writing to any file.
+    -   If a file is `LOCKED`, you **MUST NOT** overwrite it.
+    -   If you need to change a locked file, fail the task and request human intervention.
+
+2.  **Test Integrity (Ralph's Rule):**
+    -   You are **strictly forbidden** from modifying any file in `tests/`.
+    -   You must never run `git add .`. Always add specific files (e.g., `git add src/`).
+    -   If you modify a test file, the orchestrator will reject your work.
+
+3.  **Flood Control (Spawner's Rule):**
+    -   Never spawn more than 20 child tasks.
+    -   Check for existing child tasks (Idempotency) before creating new ones.
 
 ## Agent Triggers
 
@@ -79,129 +26,21 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
 - Column 6 -> `TEST_AGENT`
 - Column 8 -> `RALPH_CODER`
 
-## Coding Style Guide (Python)
+## Repository Layout
 
-### Formatting
-- Use 4-space indentation, no tabs.
-- Keep line length reasonable (~88-100 chars) but follow readability.
-- Use triple-double-quote docstrings for modules/classes/functions.
-- Prefer f-strings for interpolation.
-- Use trailing commas in multi-line literals.
+- `orchestrator.py`: Main daemon.
+- `lib/ratchet.py`: **(NEW)** Governance logic for file locking.
+- `lib/workspace.py`: Workspace I/O (enforces Ratchet).
+- `agents/`: Agent implementations.
 
-### Imports
-- Order: standard library, third-party, then local imports.
-- Group imports with a blank line between each group.
-- Prefer `pathlib.Path` over `os.path` for filesystem paths.
-- Avoid wildcard imports.
+## Coding Style & Safety
 
-### Naming
-- Modules/files: lowercase with underscores.
-- Functions/variables: `snake_case`.
-- Classes/exceptions: `PascalCase`.
-- Constants: `UPPER_SNAKE_CASE`.
-- CLI flags: use kebab-case in docs, `argparse` options in code.
+- **Logging:** Use structured logging (JSON preferred), avoid `print()` for status.
+- **Error Handling:** Always clear "started" tags on failure to allow retries.
+- **Git:** Use `subprocess` for git commands; always check `returncode`.
 
-### Types
-- Use type hints for public functions and key return values.
-- Use `Optional[...]` instead of `Union[T, None]`.
-- Prefer explicit types for structured return dicts.
+## Environment
 
-### Error Handling
-- Raise `ValueError` for input validation failures.
-- Raise `RuntimeError` for external system failures (git, CLI calls).
-- Use `try/except Exception` only at integration boundaries.
-- Log errors with clear context (task id, project id, command).
-- For Kanboard interactions, fail gracefully and continue when possible.
-
-### I/O and Subprocesses
-- Use `subprocess.run([...], capture_output=True, text=True)`.
-- Check `returncode` and raise with stderr on failure.
-- Prefer `Path` operations for file reads/writes.
-- Use explicit encoding when dealing with binary data (base64, etc.).
-
-### Logging/Output
-- Simple `print()` logging is acceptable; avoid noisy debug logs.
-- Prefix warnings with "Warning:" or "Error:" when appropriate.
-- Do not log secrets or tokens.
-
-## Domain Conventions
-
-- `dirname` must be lowercase, digits/dashes only (no dots or slashes).
-- NEW mode creates `~/projects/<dirname>` and initializes git.
-- FEATURE mode uses existing repo and creates `feat/<task_id>-<dirname>`.
-- Kanboard columns must match names in `TRIGGERS`.
-- Tagging in Kanboard uses `design-started`, `design-generated`, etc.
-
-## Task Custom Fields (MetaMagik)
-
-Tasks use custom fields via the MetaMagik plugin. The `lib/task_fields.py` module handles field retrieval with automatic fallback to YAML parsing for backwards compatibility.
-
-### User-Editable Fields
-
-| Field | Type | Required | Default |
-|-------|------|----------|---------|
-| `dirname` | Text | Yes | - |
-| `context_mode` | Dropdown | No | "NEW" |
-| `acceptance_criteria` | Textarea | No | "" |
-| `complexity` | Dropdown | No | - |
-
-### Agent-Managed Fields (Read-Only)
-
-| Field | Values | Description |
-|-------|--------|-------------|
-| `agent_status` | pending, running, completed, failed | Current agent execution status |
-| `current_phase` | design, planning, spawning, tests, coding | Which agent phase is active |
-
-### API Usage
-
-```python
-from lib.task_fields import get_task_fields, update_status, TaskFieldError
-
-# Get fields (metadata API or YAML fallback)
-try:
-    fields = get_task_fields(kb_client, task_id)
-    dirname = fields["dirname"]
-    context_mode = fields.get("context_mode", "NEW")
-except TaskFieldError as e:
-    print(f"Error: {e}")
-
-# Update agent status
-update_status(kb_client, task_id, agent_status="running", current_phase="design")
-```
-
-## Environment Variables
-
-- `KANBOARD_URL`: Kanboard JSON-RPC endpoint (default `http://localhost:88/jsonrpc.php`).
-- `KANBOARD_USER`: Kanboard API user (default `jsonrpc`).
-- `KANBOARD_TOKEN`: Kanboard API token (required).
-- `OPENCODE_CMD`: OpenCode CLI binary (default `opencode`).
-- `OPENCODE_MODEL`: Optional CLI model override (default uses OpenCode config).
-- `OPENCODE_FALLBACK_MODEL`: OpenRouter fallback model (default `grok-code-fast`).
-- `OPENROUTER_API_KEY`: OpenRouter API key for fallback requests.
-- `OPENROUTER_API_BASE`: OpenRouter API base (default `https://openrouter.ai/api/v1`).
-
-## State Tracking Tags
-
-- `design-started` / `design-generated`: ARCHITECT_AGENT state.
-- `planning-started` / `planning-generated`: PM_AGENT state.
-- `spawning-started` / `spawned`: SPAWNER_AGENT state.
-- `tests-started` / `tests-generated`: TEST_AGENT state.
-- `coding-started` / `coding-complete`: RALPH_CODER state.
-
-## Artifact Naming
-
-- `DESIGN.md`: Design artifact (written to workspace, attached to card).
-- `prd.json`: Planning artifact (breakdown into atomic stories).
-
-## Contribution Guidelines for Agents
-
-- Respect existing structure; do not move files without a reason.
-- Keep functions short and focused; avoid large monoliths.
-- Update `product-definition.md` if you change workflow behavior.
-- Update this `AGENTS.md` when adding new commands, tools, or rules.
-- Avoid changing `.env` and never commit secrets.
-
-## No Cursor/Copilot Rules Found
-
-No additional rules exist in `.cursor/rules/`, `.cursorrules`, or
-`.github/copilot-instructions.md` at this time.
+- `KANBOARD_URL`: Kanboard JSON-RPC endpoint.
+- `KANBOARD_TOKEN`: API Token.
+- `OPENCODE_CMD`: Path to OpenCode CLI.

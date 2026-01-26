@@ -4,125 +4,70 @@ Persistent sprint tracker for project progress. Updated by humans and coding age
 
 ---
 
-## Sprint 1: MetaMagik Custom Fields
-**Priority:** P1
-**Status:** done
+## Phase 1: Core Functionality (Complete)
 
-Custom field UI for Kanboard tasks via MetaMagik plugin, replacing YAML parsing in task descriptions.
-
-**Deliverables:**
-- [x] `lib/task_fields.py` - metadata API with YAML fallback
-- [x] Updated `orchestrator.py` to use new field handling
-- [x] Updated `webhook_server.py` to use new field handling
-- [x] MetaMagik plugin installation docs in CLAUDE.md
-- [x] Custom field configuration (dirname, context_mode, acceptance_criteria, complexity)
-- [x] Fixed MetaMagik API method (`getTaskMetadata` not `getAllTaskMetadata`)
-- [x] Fixed empty field default handling (context_mode defaults to NEW)
-- [x] End-to-end validation: webhook -> agent -> DESIGN.md -> file attachment
+- [x] **Sprint 1:** MetaMagik Custom Fields & Basic Board Setup
+- [x] **Sprint 2:** Context-Reset TDD Architecture Refactor
+- [x] **Sprint 3:** PM Agent & Fan-Out Spawner (with Duplication Hack)
+- [x] **Sprint 4:** Test Agent (TDD Generation)
+- [x] **Sprint 5:** Ralph Coder (Clean Context Loop)
+- [x] **Sprint 6:** End-to-End Verification (Calculator Project)
 
 ---
 
-## Sprint 2: Architecture Refactor (Context-Reset TDD)
+## Phase 2: Governance & Safety (Current)
+
+The system works, but lacks safety rails. Phase 2 focuses on "The Ratchet" (preventing regression) and "Integrity" (preventing cheating).
+
+### Sprint 8: The Ratchet Guard (Governance)
 **Priority:** P0
-**Status:** done
+**Status:** open
 
-Refactor pipeline to support "Breakdown First" workflow: Design -> Plan -> Tests -> Code.
+Implement a file-based locking mechanism to enforce approval gates physically on disk.
 
 **Deliverables:**
-- [x] Update `product-definition.md` with new column order.
-- [x] Update `setup-board.py` to reconfigure Kanboard columns.
-- [x] Update `orchestrator.py` triggers to match new flow.
-- [x] Execute `setup-board.py` to apply changes.
+- [ ] **Ratchet Manifest:** Create `lib/ratchet.py` to manage `.agentleeops/ratchet.json` (stores file paths, hashes, and lock status).
+- [ ] **Orchestrator Integration:** When a card enters an "Approved" column (3, 5, 7), lock the relevant artifacts in the manifest.
+- [ ] **Write Guard:** Update `lib/workspace.py` to check the ratchet before writing. Raise `PermissionError` if overwriting a locked file.
+- [ ] **Refinement Workflow:** Allow unlocking via specific "Request Revision" moves on the board.
 
----
+### Sprint 9: Spawner Safety (Flood Control)
+**Priority:** P0
+**Status:** open
 
-## Sprint 3: PM Agent & Fan-Out
+Harden the Spawner Agent against duplicate runs and infinite loops.
+
+**Deliverables:**
+- [ ] **Idempotency:** Query Kanboard for existing child tasks with the same `atomic_id` linked to the parent before spawning.
+- [ ] **Transaction Safety:** If `updateTask` or `linkTask` fails after duplication, attempt to delete the orphan task.
+- [ ] **Flood Control:** Implement `MAX_CHILDREN_PER_EPIC = 20`. Hard fail if `prd.json` requests more.
+
+### Sprint 10: Ralph's Straitjacket (Test Integrity)
 **Priority:** P1
-**Status:** done
+**Status:** open
 
-Create PM_AGENT that generates `prd.json` planning document and SPAWNER_AGENT to fan-out tasks.
-
-**Deliverables:**
-- [x] `agents/pm.py` - agent implementation
-- [x] `prompts/planning_prompt.txt` - prompt template
-- [x] Column 4 trigger wiring in orchestrator
-- [x] `prd.json` schema definition
-- [x] `agents/spawner.py` - Spawner logic implementation.
-- [x] **Fix Fan-Out API Error:** Implemented "Duplicate & Update" strategy to bypass MetaMagik mandatory field constraints.
-
----
-
-## Sprint 4: Test Agent (Column 6)
-**Priority:** P1
-**Status:** done
-
-Create TEST_AGENT that generates failing test files when atomic story cards reach Column 6 (Tests Draft).
+Physically prevent the Coding Agent from modifying tests to get a "Green Bar".
 
 **Deliverables:**
-- [x] `agents/test_agent.py` - agent implementation
-- [x] `prompts/test_prompt.txt` - prompt template
-- [x] Column 6 trigger wiring in orchestrator
-- [x] Tests must FAIL initially (by design).
+- [ ] **Git Staging Rules:** Modify `agents/ralph.py` to forbid `git add .`. It must specificially add `src/` or intended files.
+- [ ] **Pre-Commit Check:** Implement a check: `git diff --cached --name-only`. If `tests/` matches, abort the commit and fail the agent.
+- [ ] **Hash Verification:** Ralph verifies the hash of the test file matches the `ratchet.json` record before starting.
 
----
-
-## Sprint 5: Ralph Coder (Column 8)
-**Priority:** P1
-**Status:** done
-
-Create RALPH_CODER agent that writes code to make tests PASS when cards reach Column 8.
-
-**Deliverables:**
-- [x] `agents/ralph.py` - agent implementation
-- [x] Column 8 trigger wiring in orchestrator
-- [x] Test execution and validation
-- [x] **Clean Context Loop:** Implemented iterative git commit/retry loop.
-
----
-
-## Sprint 6: FEATURE Mode
+### Sprint 11: Observability & Error Handling
 **Priority:** P2
 **Status:** open
 
-Support branch creation for existing repositories (context_mode: FEATURE).
+Improve visibility into agent actions and failure states.
 
 **Deliverables:**
-- [ ] Branch creation: `feat/<task_id>-<dirname>`
-- [ ] Existing repo detection and validation
-- [ ] Integration testing with real repos
+- [ ] **Structured Logging:** Replace `print()` with a logger that emits JSON (Timestamp, Level, Agent, TaskID, Message).
+- [ ] **Tag Hygiene:** Ensure `*-started` tags are cleared or replaced with `*-failed` tags upon exception in `orchestrator.py`.
+- [ ] **Trace Store (Optional):** Simple SQLite log of prompts/completions for cost tracking.
 
 ---
 
-## Sprint 7: End-to-End Testing (Verification)
-**Priority:** P2
-**Status:** in_progress
+## Backlog (Future)
 
-Full workflow test from Inbox to Done with all agents.
-
-**Deliverables:**
-- [x] **Fan-Out Fix:** Confirmed child cards are spawned correctly via Duplication Hack.
-- [x] Test card creation in Inbox
-- [x] Automated progression through all columns
-- [x] Artifact verification at each stage (Design, PRD, Spawning, Tests, Code)
-
----
-
-## For Consideration: GenAI Ops Hardening
-**Priority:** TBD
-**Status:** proposed
-
-Feedback from GenAI Ops review.
-
-**Security & Safety:**
-- [ ] **Docker Sandbox for Ralph:** Run `RALPH_CODER` inside a Docker container to prevent host OS damage.
-- [ ] **Validation:** Create `Dockerfile.agent-runner`.
-
-**Observability:**
-- [ ] **Trace Store:** Implement local SQLite logging for prompt/completion pairs.
-- [ ] **Error Handling:** Add robust `retry_with_backoff` for API calls in orchestrator.
-
-**Workflow & Robustness:**
-- [ ] **Context Map:** Generate a repo tree/map to feed into context.
-- [ ] **Agent Evals:** Create `tests/golden_scenarios/` to test agent performance.
-- [ ] **Webhook Security:** Validate webhook source or use shared secret.
-- [ ] **New Mode Safety:** Handle case where directory already exists in NEW mode.
+- [ ] **FEATURE Mode:** Finalize support for existing repositories (branch management).
+- [ ] **Docker Sandboxing:** Run Ralph in a container.
+- [ ] **Webhook Security:** Validate webhook signatures.
