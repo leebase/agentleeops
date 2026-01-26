@@ -22,51 +22,65 @@ Custom field UI for Kanboard tasks via MetaMagik plugin, replacing YAML parsing 
 
 ---
 
-## Sprint 2: Scaffold Agent
-**Priority:** P1
-**Status:** open
+## Sprint 2: Architecture Refactor (Context-Reset TDD)
+**Priority:** P0
+**Status:** done
 
-Create SCAFFOLD_AGENT that generates failing test files when cards reach Column 4.
+Refactor pipeline to support "Breakdown First" workflow: Design -> Plan -> Tests -> Code.
 
 **Deliverables:**
-- [ ] `agents/scaffold.py` - agent implementation
-- [ ] `prompts/scaffold_prompt.txt` - prompt template
-- [ ] Column 4 trigger wiring in orchestrator
-- [ ] Tests must FAIL initially (by design - Double-Blind Rule)
-- [ ] File attachment to Kanboard task
+- [x] Update `product-definition.md` with new column order.
+- [x] Update `setup-board.py` to reconfigure Kanboard columns.
+- [x] Update `orchestrator.py` triggers to match new flow.
+- [x] Execute `setup-board.py` to apply changes.
 
 ---
 
-## Sprint 3: PM Agent
+## Sprint 3: PM Agent & Fan-Out
 **Priority:** P1
-**Status:** open
+**Status:** done
 
-Create PM_AGENT that generates `prd.json` planning document when cards reach Column 6.
+Create PM_AGENT that generates `prd.json` planning document and SPAWNER_AGENT to fan-out tasks.
 
 **Deliverables:**
-- [ ] `agents/pm.py` - agent implementation
-- [ ] `prompts/planning_prompt.txt` - prompt template
-- [ ] Column 6 trigger wiring in orchestrator
-- [ ] `prd.json` schema definition
-- [ ] File attachment to Kanboard task
+- [x] `agents/pm.py` - agent implementation
+- [x] `prompts/planning_prompt.txt` - prompt template
+- [x] Column 4 trigger wiring in orchestrator
+- [x] `prd.json` schema definition
+- [x] `agents/spawner.py` - Spawner logic implementation.
+- [x] **Fix Fan-Out API Error:** Implemented "Duplicate & Update" strategy to bypass MetaMagik mandatory field constraints.
 
 ---
 
-## Sprint 4: Ralph Coder
+## Sprint 4: Test Agent (Column 6)
 **Priority:** P1
-**Status:** open
+**Status:** done
+
+Create TEST_AGENT that generates failing test files when atomic story cards reach Column 6 (Tests Draft).
+
+**Deliverables:**
+- [x] `agents/test_agent.py` - agent implementation
+- [x] `prompts/test_prompt.txt` - prompt template
+- [x] Column 6 trigger wiring in orchestrator
+- [x] Tests must FAIL initially (by design).
+
+---
+
+## Sprint 5: Ralph Coder (Column 8)
+**Priority:** P1
+**Status:** done
 
 Create RALPH_CODER agent that writes code to make tests PASS when cards reach Column 8.
 
 **Deliverables:**
-- [ ] `agents/ralph.py` - agent implementation
-- [ ] Column 8 trigger wiring in orchestrator
-- [ ] Test execution and validation
-- [ ] Code must make existing tests PASS (no test modification - Test Integrity rule)
+- [x] `agents/ralph.py` - agent implementation
+- [x] Column 8 trigger wiring in orchestrator
+- [x] Test execution and validation
+- [x] **Clean Context Loop:** Implemented iterative git commit/retry loop.
 
 ---
 
-## Sprint 5: FEATURE Mode
+## Sprint 6: FEATURE Mode
 **Priority:** P2
 **Status:** open
 
@@ -79,14 +93,36 @@ Support branch creation for existing repositories (context_mode: FEATURE).
 
 ---
 
-## Sprint 6: End-to-End Testing
+## Sprint 7: End-to-End Testing (Verification)
 **Priority:** P2
-**Status:** open
+**Status:** in_progress
 
 Full workflow test from Inbox to Done with all agents.
 
 **Deliverables:**
-- [ ] Test card creation in Inbox
-- [ ] Automated progression through all columns
-- [ ] Artifact verification at each stage
-- [ ] Documentation of test procedure
+- [x] **Fan-Out Fix:** Confirmed child cards are spawned correctly via Duplication Hack.
+- [x] Test card creation in Inbox
+- [x] Automated progression through all columns
+- [x] Artifact verification at each stage (Design, PRD, Spawning, Tests, Code)
+
+---
+
+## For Consideration: GenAI Ops Hardening
+**Priority:** TBD
+**Status:** proposed
+
+Feedback from GenAI Ops review.
+
+**Security & Safety:**
+- [ ] **Docker Sandbox for Ralph:** Run `RALPH_CODER` inside a Docker container to prevent host OS damage.
+- [ ] **Validation:** Create `Dockerfile.agent-runner`.
+
+**Observability:**
+- [ ] **Trace Store:** Implement local SQLite logging for prompt/completion pairs.
+- [ ] **Error Handling:** Add robust `retry_with_backoff` for API calls in orchestrator.
+
+**Workflow & Robustness:**
+- [ ] **Context Map:** Generate a repo tree/map to feed into context.
+- [ ] **Agent Evals:** Create `tests/golden_scenarios/` to test agent performance.
+- [ ] **Webhook Security:** Validate webhook source or use shared secret.
+- [ ] **New Mode Safety:** Handle case where directory already exists in NEW mode.

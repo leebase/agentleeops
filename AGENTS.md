@@ -47,7 +47,12 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
 - `orchestrator.py`: Main daemon/poller (Kanboard triggers).
 - `webhook_server.py`: Webhook-based trigger (HTTP server).
 - `setup-board.py`: One-time Kanboard column initialization.
-- `agents/`: Agent implementations (only `architect.py` is real today).
+- `agents/`: Agent implementations:
+  - `architect.py`: Design generation (Col 2).
+  - `pm.py`: PRD breakdown (Col 4).
+  - `spawner.py`: Fan-out logic (Col 5).
+  - `test_agent.py`: TDD test generation (Col 6).
+  - `ralph.py`: Coding loop (Col 8).
 - `lib/`: Shared utilities:
   - `task_fields.py`: Task field handling via metadata API with YAML fallback.
   - `workspace.py`: Workspace creation and management.
@@ -55,7 +60,7 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
 - `prompts/`: Prompt templates (e.g., `design_prompt.txt`).
 - `product-definition.md`: Authoritative spec for workflow rules.
 - `sprintPlan.md`: Persistent sprint tracker for progress visibility.
-- `CLAUDE.md`: Additional operating constraints for assistants.
+- `CLAUDE.md` / `GEMINI.md`: Additional operating constraints for assistants.
 
 ## Workflow Rules (Non-Negotiable)
 
@@ -68,10 +73,11 @@ the command here and keep it lightweight (ruff/black/mypy are preferred).
 
 ## Agent Triggers
 
-- Column 2 -> `ARCHITECT_AGENT` (implemented).
-- Column 4 -> `SCAFFOLD_AGENT` (stub).
-- Column 6 -> `PM_AGENT` (stub).
-- Column 8 -> `RALPH_CODER` (stub).
+- Column 2 -> `ARCHITECT_AGENT`
+- Column 4 -> `PM_AGENT`
+- Column 5 -> `SPAWNER_AGENT`
+- Column 6 -> `TEST_AGENT`
+- Column 8 -> `RALPH_CODER`
 
 ## Coding Style Guide (Python)
 
@@ -144,7 +150,7 @@ Tasks use custom fields via the MetaMagik plugin. The `lib/task_fields.py` modul
 | Field | Values | Description |
 |-------|--------|-------------|
 | `agent_status` | pending, running, completed, failed | Current agent execution status |
-| `current_phase` | design, scaffold, planning, coding | Which agent phase is active |
+| `current_phase` | design, planning, spawning, tests, coding | Which agent phase is active |
 
 ### API Usage
 
@@ -177,14 +183,15 @@ update_status(kb_client, task_id, agent_status="running", current_phase="design"
 ## State Tracking Tags
 
 - `design-started` / `design-generated`: ARCHITECT_AGENT state.
-- `scaffold-started` / `scaffold-generated`: SCAFFOLD_AGENT state.
 - `planning-started` / `planning-generated`: PM_AGENT state.
+- `spawning-started` / `spawned`: SPAWNER_AGENT state.
+- `tests-started` / `tests-generated`: TEST_AGENT state.
 - `coding-started` / `coding-complete`: RALPH_CODER state.
 
 ## Artifact Naming
 
 - `DESIGN.md`: Design artifact (written to workspace, attached to card).
-- `prd.json`: Planning artifact (future).
+- `prd.json`: Planning artifact (breakdown into atomic stories).
 
 ## Contribution Guidelines for Agents
 

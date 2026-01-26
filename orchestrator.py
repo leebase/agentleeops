@@ -29,10 +29,12 @@ KB_USER = os.getenv("KANBOARD_USER", "jsonrpc")
 KB_TOKEN = os.getenv("KANBOARD_TOKEN")
 
 # Column triggers (Must match your board EXACTLY)
+# Updated to match Product Definition v1.1 (Context-Reset TDD)
 TRIGGERS = {
     "2. Design Draft": "ARCHITECT_AGENT",
-    "4. Repo & Tests Draft": "SCAFFOLD_AGENT",
-    "6. Planning Draft": "PM_AGENT",
+    "4. Planning Draft": "PM_AGENT",      # Moved up (was col 6)
+    "5. Plan Approved": "SPAWNER_AGENT",  # New: Fan-Out Trigger
+    "6. Tests Draft": "TEST_AGENT",       # Moved down & renamed (was col 4 Scaffold)
     "8. Ralph Loop": "RALPH_CODER",
 }
 
@@ -42,13 +44,17 @@ TAGS = {
         "started": "design-started",
         "completed": "design-generated",
     },
-    "SCAFFOLD_AGENT": {
-        "started": "scaffold-started",
-        "completed": "scaffold-generated",
-    },
     "PM_AGENT": {
         "started": "planning-started",
         "completed": "planning-generated",
+    },
+    "SPAWNER_AGENT": {
+        "started": "spawning-started",
+        "completed": "spawned",
+    },
+    "TEST_AGENT": {
+        "started": "tests-started",
+        "completed": "tests-generated",
     },
     "RALPH_CODER": {
         "started": "coding-started",
@@ -177,6 +183,219 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
         return False
 
 
+def process_pm_task(kb, task: dict, project_id: int) -> bool:
+    """
+    Process a task in the Planning Draft column.
+    """
+    from agents.pm import run_pm_agent
+
+    task_id = task['id']
+    title = task['title']
+
+    # Check if already processed
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["PM_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        print(f"  Task #{task_id} already processed (has {agent_tags['completed']} tag)")
+        return False
+
+    if has_tag(tags, agent_tags["started"]):
+        print(f"  Task #{task_id} already in progress (has {agent_tags['started']} tag)")
+        return False
+
+    # Get task fields
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+        context_mode = fields.get("context_mode", "NEW")
+        acceptance_criteria = fields.get("acceptance_criteria", "")
+    except TaskFieldError as e:
+        print(f"  Error: {e}")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**PM_AGENT Error**\n\n{e}")
+        return False
+
+    print(f"  Processing: {title}")
+
+    # Mark as started
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="planning")
+
+    # Run PM agent
+    result = run_pm_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        context_mode=context_mode,
+        acceptance_criteria=acceptance_criteria,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="planning")
+        print(f"  Success: prd.json written with {result['story_count']} stories.")
+        return True
+    else:
+        update_status(kb, task_id, agent_status="failed", current_phase="planning")
+        print(f"  Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**PM_AGENT Failed**\n\n{result['error']}")
+        return False
+
+
+def process_spawner_task(kb, task: dict, project_id: int) -> bool:
+    """
+    Process a task in the Plan Approved column (Fan-Out).
+    """
+    from agents.spawner import run_spawner_agent
+
+    task_id = task['id']
+    title = task['title']
+
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["SPAWNER_AGENT"]
+
+    # Only run if not already spawned
+    if has_tag(tags, agent_tags["completed"]):
+        return False
+    
+    if has_tag(tags, agent_tags["started"]):
+        return False
+
+    # Check for prd.json existence? The agent does that.
+    
+    # Get fields for dirname
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return False
+
+    print(f"  Processing Spawner for: {title}")
+    
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    # No status update needed? Or maybe "spawning"
+    
+    result = run_spawner_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        print(f"  Success: Spawned {result['count']} child cards.")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**SPAWNER**: Automatically created {result['count']} child tasks in 'Tests Draft'.")
+        return True
+    else:
+        # If failed, remove started tag so it retries? Or tag failed?
+        # For now, just log.
+        print(f"  Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**SPAWNER Failed**\n\n{result['error']}")
+        return False
+
+
+def process_test_task(kb, task: dict, project_id: int) -> bool:
+    """
+    Process a task in the Tests Draft column.
+    """
+    from agents.test_agent import run_test_agent
+
+    task_id = task['id']
+    title = task['title']
+
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["TEST_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        return False
+    if has_tag(tags, agent_tags["started"]):
+        return False
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return False
+
+    print(f"  Processing Test Generation for: {title}")
+    
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="tests")
+
+    result = run_test_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="tests")
+        print(f"  Success: Created {result['test_file']}")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**TEST_AGENT**: Created test file `{result['test_file']}`.\n\nReady for Human Review.")
+        return True
+    else:
+        update_status(kb, task_id, agent_status="failed", current_phase="tests")
+        print(f"  Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**TEST_AGENT Failed**\n\n{result['error']}")
+        return False
+
+
+def process_ralph_task(kb, task: dict, project_id: int) -> bool:
+    """
+    Process a task in the Ralph Loop column.
+    """
+    from agents.ralph import run_ralph_agent
+
+    task_id = task['id']
+    title = task['title']
+    
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["RALPH_CODER"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        return False
+    if has_tag(tags, agent_tags["started"]):
+        return False
+    
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return False
+
+    print(f"  Processing Ralph Loop for: {title}")
+    
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="coding")
+
+    result = run_ralph_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="coding")
+        print(f"  Success: Green Bar in {result['iterations']} iterations.")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**RALPH**: Tests passed in {result['iterations']} iterations. Code committed.")
+        return True
+    else:
+        update_status(kb, task_id, agent_status="failed", current_phase="coding")
+        print(f"  Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**RALPH Failed**\n\n{result['error']}")
+        return False
+
+
 def process_task(kb, task: dict, action: str, project_id: int) -> bool:
     """
     Route task to appropriate agent.
@@ -192,17 +411,19 @@ def process_task(kb, task: dict, action: str, project_id: int) -> bool:
     if action == "ARCHITECT_AGENT":
         return process_architect_task(kb, task, project_id)
 
-    elif action == "SCAFFOLD_AGENT":
-        print(f"  [Stub] SCAFFOLD_AGENT not yet implemented")
-        return False
-
     elif action == "PM_AGENT":
-        print(f"  [Stub] PM_AGENT not yet implemented")
-        return False
+        return process_pm_task(kb, task, project_id)
+
+    elif action == "SPAWNER_AGENT":
+        return process_spawner_task(kb, task, project_id)
+
+    elif action == "TEST_AGENT":
+        return process_test_task(kb, task, project_id)
 
     elif action == "RALPH_CODER":
-        print(f"  [Stub] RALPH_CODER not yet implemented")
-        return False
+        return process_ralph_task(kb, task, project_id)
+
+    return False
 
     return False
 

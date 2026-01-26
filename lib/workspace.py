@@ -7,6 +7,11 @@ import subprocess
 from pathlib import Path
 
 
+def get_workspace_path(dirname: str) -> Path:
+    """Get the path to a workspace directory."""
+    return Path.home() / "projects" / dirname
+
+
 def setup_workspace(dirname: str, context_mode: str) -> Path:
     """
     Set up a workspace based on context mode.

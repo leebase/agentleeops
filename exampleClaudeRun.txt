@@ -1,0 +1,43 @@
+● All tasks completed. Here's a summary of the implementation:                                                                                             
+                                                                                                                                                           
+  Files Created                                                                                                                                            
+                                                                                                                                                           
+  lib/task_fields.py - New shared module with:                                                                                                             
+  - TaskFieldError exception class                                                                                                                         
+  - get_task_fields() - Reads from metadata API, falls back to YAML parsing                                                                                
+  - update_status() - Updates agent status in task metadata                                                                                                
+  - get_status() - Retrieves agent status from metadata                                                                                                    
+  - parse_yaml_description() - Legacy YAML parser (backwards compat)                                                                                       
+  - validate_task_fields() - Validates dirname format and required fields                                                                                  
+                                                                                                                                                           
+  Files Updated                                                                                                                                            
+                                                                                                                                                           
+  orchestrator.py:                                                                                                                                         
+  - Removed parse_card_description() function                                                                                                              
+  - Added import for lib.task_fields                                                                                                                       
+  - Updated process_architect_task() to use get_task_fields() with TaskFieldError handling                                                                 
+  - Added update_status() calls for running/completed/failed states                                                                                        
+  - Removed unused imports (re, Path)                                                                                                                      
+                                                                                                                                                           
+  webhook_server.py:                                                                                                                                       
+  - Removed parse_card_description() function                                                                                                              
+  - Added import for lib.task_fields                                                                                                                       
+  - Updated process_design_draft() to use get_task_fields() with TaskFieldError handling                                                                   
+  - Added update_status() calls for running/completed/failed states                                                                                        
+  - Removed unused desc variable                                                                                                                           
+                                                                                                                                                           
+  CLAUDE.md:                                                                                                                                               
+  - Added MetaMagik plugin installation instructions                                                                                                       
+  - Updated Card Input Contract with custom fields UI workflow                                                                                             
+  - Added legacy YAML format as fallback documentation                                                                                                     
+  - Added lib/task_fields.py to Library Modules section                                                                                                    
+                                                                                                                                                           
+  AGENTS.md:                                                                                                                                               
+  - Updated Repository Layout with detailed lib/ contents                                                                                                  
+  - Added "Task Custom Fields (MetaMagik)" section with field tables and API usage example                                                                 
+                                                                                                                                                           
+  Next Steps (Manual)                                                                                                                                      
+                                                                                                                                                           
+  1. Install MetaMagik plugin in Kanboard container (see CLAUDE.md instructions)                                                                           
+  2. Configure custom fields in Kanboard Settings > Custom Fields                                                                                          
+  3. Test end-to-end by creating a task with custom fields and moving to "2. Design Draft"      

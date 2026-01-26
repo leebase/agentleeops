@@ -64,6 +64,10 @@ def call_llm(
     return call_opencode(prompt, model, timeout)
 
 
+# Alias for new agents
+run_opencode = call_opencode
+
+
 def check_opencode_installed() -> bool:
     """
     Check if OpenCode CLI is installed and accessible.

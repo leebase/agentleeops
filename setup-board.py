@@ -35,10 +35,10 @@ COLUMNS = [
     ("1. Inbox", 0),
     ("2. Design Draft", 1),        # Agent focused on one design
     ("3. Design Approved", 0),
-    ("4. Repo & Tests Draft", 1),  # Agent scaffolding one repo
-    ("5. Tests Approved", 0),
-    ("6. Planning Draft", 1),      # Agent breaking down one plan
-    ("7. Plan Approved", 0),
+    ("4. Planning Draft", 1),      # Agent breaking down one plan (NEW: Before Tests)
+    ("5. Plan Approved", 0),       # Fan-Out Point
+    ("6. Tests Draft", 1),         # Agent writing tests for Atomic Story
+    ("7. Tests Approved", 0),
     ("8. Ralph Loop", 1),          # The Grind: Focus on ONE thing
     ("9. Final Review", 0),
     ("10. Done", 0)
@@ -63,7 +63,8 @@ def setup_project(kb):
         print(f"   -> Project not found. Creating '{PROJECT_NAME}'...")
         project_id = kb.create_project(name=PROJECT_NAME, description="AgentLeeOps Automated Board")
     else:
-        print(f"   -> Found Project ID: {project_id}")
+        print(f"   -> Found Project ID: {project_id['id']}")
+        project_id = project_id['id']
 
     return project_id
 
@@ -105,8 +106,17 @@ def configure_columns(kb, project_id):
 
 def configure_tags(kb, project_id):
     print("🏷️  Configuring Tags...")
-    existing_tags = kb.get_tags(project_id=project_id)
-    existing_names = {t['name'] for t in existing_tags}
+    try:
+        existing_tags = kb.get_project_tags(project_id=project_id)
+    except Exception:
+        # Fallback if method mapping is tricky or method doesn't exist
+        existing_tags = []
+    
+    if isinstance(existing_tags, dict):
+       # Sometimes it returns a dict of id->name
+       existing_names = set(existing_tags.values())
+    else:
+       existing_names = {t['name'] for t in existing_tags}
 
     for tag in TAGS:
         if tag not in existing_names:
