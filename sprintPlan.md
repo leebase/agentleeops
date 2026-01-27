@@ -44,14 +44,14 @@ Harden the Spawner Agent against duplicate runs and infinite loops.
 
 ### Sprint 10: Ralph's Straitjacket (Test Integrity)
 **Priority:** P1
-**Status:** open
+**Status:** done
 
 Physically prevent the Coding Agent from modifying tests to get a "Green Bar".
 
 **Deliverables:**
-- [ ] **Git Staging Rules:** Modify `agents/ralph.py` to forbid `git add .`.
-- [ ] **Pre-Commit Check:** Implement a check: `git diff --cached --name-only`.
-- [ ] **Hash Verification:** Ralph verifies the hash of the test file matches the `ratchet.json` record.
+- [x] **Git Staging Rules:** Modify `agents/ralph.py` to forbid `git add .`.
+- [x] **Pre-Commit Check:** Implement a check: `git diff --cached --name-only`.
+- [x] **Hash Verification:** Ralph verifies the hash of the test file matches the `ratchet.json` record.
 
 ### Sprint 11: Observability & Error Handling
 **Priority:** P2
