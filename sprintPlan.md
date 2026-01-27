@@ -68,3 +68,35 @@ Run Ralph in a container to prevent host filesystem damage.
 
 **Deliverables:**
 - [ ] Validate webhook signatures to prevent unauthorized triggers.
+
+---
+
+## Phase 4: LLM Provider Abstraction (Planned)
+
+**Branch:** `feat/llm-provider-abstraction`
+**Detailed Plan:** See `llm-redesign-sprint-plan.md`
+
+### Sprint 16: Core Abstraction + OpenRouter (Phase A)
+**Priority:** P1
+**Status:** open
+
+Pluggable LLM provider system with role-based routing.
+
+**Deliverables:**
+- [ ] `lib/llm/` module with client, config, response, trace
+- [ ] OpenRouter HTTP provider
+- [ ] Role definitions: planner, coder, reviewer, summarizer
+- [ ] PM Agent converted as proof of concept
+- [ ] Basic trace recording
+
+### Sprint 17: CLI Providers + Full Rollout (Phase B)
+**Priority:** P1
+**Status:** open
+
+**Deliverables:**
+- [ ] OpenCode CLI provider
+- [ ] Gemini CLI provider
+- [ ] JSON repair for CLI output
+- [ ] All agents converted to use LLMClient
+- [ ] Doctor command for configuration validation
+- [ ] Documentation
