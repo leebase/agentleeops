@@ -24,20 +24,23 @@ Persistent sprint tracker for project progress. Updated by humans and coding age
 
 ---
 
-## Phase 3: Scaling & Polish (Next)
-
-The system is operational, but the "Discount Engine" demo revealed edge cases in LLM reliability and git history management.
+## Phase 3: Scaling & Polish (In Progress)
 
 ### Sprint 12: Robustness & LLM Guards
 **Priority:** P1
-**Status:** open
+**Status:** complete
 
-Prevent "LLM Refusal Injection" and ensure artifacts are properly committed.
+Prevent "LLM Refusal Injection" and ensure system reliability.
 
 **Deliverables:**
-- [ ] **Ralph's Syntax Guard:** Before writing code to disk, run `ast.parse()`. If the LLM output isn't valid Python (e.g. "I cannot do that"), reject it and retry.
-- [ ] **Artifact Committer:** The `GOVERNANCE_AGENT` (or Test Agent) must `git add/commit` generated tests/designs to `master` so they exist in history before Ralph branches off.
-- [ ] **Context Fix:** Ensure Ralph's prompt explicitly includes the absolute path to files to prevent LLM confusion.
+- [x] **Syntax Guard (`lib/syntax_guard.py`):** Validates LLM output with `ast.parse()` (Python) and `json.loads()` (JSON) before writing to disk. Rejects prose/"I cannot do that" responses.
+- [x] **Agent Integration:** Ralph, Test Agent, and PM Agent all use syntax guard.
+- [x] **Webhook Parity:** `webhook_server.py` now triggers all 6 agents (was only ARCHITECT). Full automation via webhook now possible.
+- [x] **Code Consolidation:** Tag helpers (`get_task_tags`, `add_task_tag`, `has_tag`) moved to `lib/task_fields.py`.
+- [x] **Integration Test Suite:** 59 tests covering ratchet, syntax guard, task fields, and workspace modules.
+
+**Remaining (deferred to Sprint 13):**
+- [ ] **Artifact Committer:** Auto-commit designs/tests to master before Ralph branches.
 
 ### Sprint 13: Feature Mode & Branching
 **Priority:** P2

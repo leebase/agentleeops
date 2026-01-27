@@ -42,6 +42,13 @@ To prevent "Cheating" (making tests pass by deleting assertions):
 ### 4.3 Fan-Out Flood Control
 The Spawner Agent enforces a hard limit (default: 20) on the number of child cards generated from a single `prd.json` to prevent runaway API calls or cost explosions.
 
+### 4.4 LLM Syntax Guard
+To prevent "LLM Refusal Injection" (model responds with prose instead of code):
+1.  **Python Validation:** All code is validated with `ast.parse()` before writing to disk.
+2.  **JSON Validation:** All JSON is validated with `json.loads()` before writing.
+3.  **Rejection & Retry:** Invalid output is rejected and the agent retries (up to MAX_RETRIES).
+4.  **Implementation:** `lib/syntax_guard.py` provides `safe_extract_python()` and `safe_extract_json()`.
+
 ## 5. The "Context Mode"
 
 | Mode | Trigger | Agent Behavior |

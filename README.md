@@ -72,16 +72,24 @@ The orchestrator parses this block and uses it to decide how to set up the works
 - **Branch naming:** `feat/<task_id>-<dirname>`.
 - **History:** aim for clean, reviewable commits that reflect artifact checkpoints (design, tests, plan, implementation).
 
-## Orchestrator
+## Running the System
 
-The main entrypoint is `orchestrator.py`, which is responsible for:
+Two modes are available:
 
-- Reading the Kanboard card metadata.
-- Parsing the YAML input contract (dirname, context_mode, acceptance_criteria).
-- Preparing the workspace according to context mode.
-- Driving agents through the Kanboard columns and ensuring required artifacts are produced.
+### Webhook Mode (Recommended)
+```bash
+python -u webhook_server.py --port 5000
+```
+Configure Kanboard webhook URL to `http://<your-ip>:5000/`. Cards moving to trigger columns automatically invoke agents.
 
-See `product-definition.md` for the full, authoritative specification of the workflow and rules.
+### Polling Mode
+```bash
+python orchestrator.py --poll-interval 10
+```
+
+Both modes support all 6 agents: ARCHITECT, GOVERNANCE, PM, SPAWNER, TEST, and RALPH.
+
+See `product-definition.md` for the full workflow specification.
 
 ## Development
 
@@ -97,8 +105,25 @@ See `product-definition.md` for the full, authoritative specification of the wor
 - Verify OpenCode CLI: `opencode --version`
 - Connect OpenCode to ChatGPT Plus: run `/connect` in OpenCode and select GPT 5.2 Codex
 
-- Run tests with the project’s configured test runner (e.g., `pytest` or Playwright) once the test suite and tooling are wired up.
+## Testing
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test modules
+pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
+```
+
+The test suite covers: ratchet governance, LLM syntax validation, task field parsing, and workspace management.
 
 ## Status
 
-AgentLeeOps is currently under active development. The `product-definition.md` file is the source of truth for intended behavior and should be kept in sync with any changes to the workflow or tooling.
+AgentLeeOps is operational through Phase 2 (Governance & Safety) with Phase 3 in progress. See `sprintPlan.md` for detailed progress tracking.
+
+**Current capabilities:**
+- Full 10-column Kanboard workflow
+- 6 agents (Architect, PM, Spawner, Test, Ralph, Governance)
+- Ratchet governance with SHA256 hash verification
+- LLM syntax guards to prevent refusal injection
+- Webhook and polling automation modes
