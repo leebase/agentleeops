@@ -102,8 +102,10 @@ See `product-definition.md` for the full workflow specification.
   pip install -r requirements.txt
   ```
 
-- Verify OpenCode CLI: `opencode --version`
-- Connect OpenCode to ChatGPT Plus: run `/connect` in OpenCode and select GPT 5.2 Codex
+- **LLM Configuration:** Set `OPENROUTER_API_KEY` in `.env` for production LLM calls
+  - Get your API key from: https://openrouter.ai/keys
+  - See `config/llm.yaml` for role-based LLM routing configuration
+- Legacy: Verify OpenCode CLI: `opencode --version` (optional, for backward compatibility)
 
 ## Testing
 
@@ -115,15 +117,18 @@ pytest tests/
 pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 ```
 
-The test suite covers: ratchet governance, LLM syntax validation, task field parsing, and workspace management.
+The test suite (90+ tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction, task field parsing, and workspace management.
 
 ## Status
 
-AgentLeeOps is operational through Phase 2 (Governance & Safety) with Phase 3 in progress. See `sprintPlan.md` for detailed progress tracking.
+AgentLeeOps is operational through Phase 3 with Phase 4 (LLM Provider Abstraction) in progress. See `sprintPlan.md` for detailed progress tracking.
 
 **Current capabilities:**
 - Full 10-column Kanboard workflow
 - 6 agents (Architect, PM, Spawner, Test, Ralph, Governance)
+- Pluggable LLM provider system with role-based routing (Sprint 16)
+- OpenRouter HTTP provider with Claude Sonnet 4
 - Ratchet governance with SHA256 hash verification
 - LLM syntax guards to prevent refusal injection
+- Enhanced trace recording (`.agentleeops/traces/`)
 - Webhook and polling automation modes

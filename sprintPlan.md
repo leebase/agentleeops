@@ -78,16 +78,18 @@ Run Ralph in a container to prevent host filesystem damage.
 
 ### Sprint 16: Core Abstraction + OpenRouter (Phase A)
 **Priority:** P1
-**Status:** open
+**Status:** complete
 
 Pluggable LLM provider system with role-based routing.
 
 **Deliverables:**
-- [ ] `lib/llm/` module with client, config, response, trace
-- [ ] OpenRouter HTTP provider
-- [ ] Role definitions: planner, coder, reviewer, summarizer
-- [ ] PM Agent converted as proof of concept
-- [ ] Basic trace recording
+- [x] `lib/llm/` module with client, config, response, trace
+- [x] OpenRouter HTTP provider
+- [x] Role definitions: planner, coder, reviewer, summarizer
+- [x] PM Agent converted as proof of concept
+- [x] Basic trace recording
+- [x] 31 new tests (all passing)
+- [x] Integration test with real OpenRouter API successful
 
 ### Sprint 17: CLI Providers + Full Rollout (Phase B)
 **Priority:** P1

@@ -1,3 +1,5 @@
 kanboard
 python-dotenv
 pytest
+pyyaml
+requests

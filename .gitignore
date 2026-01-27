@@ -39,3 +39,6 @@ webhook_server.log
 screenshots/
 handoff.md
 h
+
+# LLM traces (Sprint 16)
+.agentleeops/traces/
