@@ -17,6 +17,7 @@ from lib.opencode import run_opencode
 from lib.task_fields import get_task_fields
 from lib.workspace import get_workspace_path, safe_write_file
 from lib.ratchet import verify_integrity
+from lib.syntax_guard import safe_extract_python
 
 PROMPT_TEMPLATE = Path("prompts/ralph_prompt.txt")
 MAX_RETRIES = 5
@@ -127,18 +128,18 @@ def run_ralph_agent(task_id: str, title: str, dirname: str, kb_client, project_i
         # Call LLM
         llm_response = run_opencode(prompt, model="gpt-4o")
 
-        # Extract Code
+        # Extract and Validate Code (Syntax Guard)
+        new_code, syntax_error = safe_extract_python(llm_response)
+        if syntax_error:
+            print(f"    LLM returned invalid Python: {syntax_error}")
+            print(f"    Retrying...")
+            continue
+
         try:
-            new_code = llm_response
-            if "```python" in new_code:
-                new_code = new_code.split("```python")[1].split("```")[0].strip()
-            elif "```" in new_code:
-                new_code = new_code.split("```")[1].split("```")[0].strip()
-            
             # Use safe_write_file (will check ratchet, but src/ is not locked)
             safe_write_file(workspace, source_file_rel, new_code)
         except Exception as e:
-            print(f"    Failed to parse LLM output or write file: {e}")
+            print(f"    Failed to write file: {e}")
             continue
 
         # Commit WIP - STRICT STAGING

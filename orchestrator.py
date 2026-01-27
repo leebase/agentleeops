@@ -18,7 +18,7 @@ import time
 from dotenv import load_dotenv
 from kanboard import Client
 
-from lib.task_fields import get_task_fields, update_status, TaskFieldError
+from lib.task_fields import get_task_fields, update_status, TaskFieldError, get_task_tags, add_task_tag, has_tag
 
 # Load environment variables from .env file
 load_dotenv()
@@ -80,42 +80,6 @@ def connect_kb():
     except Exception as e:
         print(f"Connection Failed: {e}")
         sys.exit(1)
-
-
-def get_task_tags(kb, task_id: int) -> list:
-    """Get tags for a task."""
-    try:
-        tags = kb.get_task_tags(task_id=task_id)
-        if not tags:
-            return []
-        if isinstance(tags, dict):
-            return [str(value) for value in tags.values()]
-        if isinstance(tags, list):
-            if tags and isinstance(tags[0], dict):
-                return [tag.get('name') for tag in tags if tag.get('name')]
-            return [str(tag) for tag in tags]
-        return []
-    except Exception:
-        return []
-
-
-def add_task_tag(kb, project_id: int, task_id: int, tag_name: str):
-    """Add a tag to a task (creates tag if needed)."""
-    try:
-        project_id = int(project_id)
-        task_id = int(task_id)
-        existing = get_task_tags(kb, task_id)
-        if tag_name in existing:
-            return
-        updated = existing + [tag_name]
-        kb.set_task_tags(project_id=project_id, task_id=task_id, tags=updated)
-    except Exception as e:
-        log.warning(f"Could not add tag '{tag_name}': {e}", task_id=task_id)
-
-
-def has_tag(tags: list, tag_name: str) -> bool:
-    """Check if a tag is in the tags list."""
-    return tag_name in tags
 
 
 from lib.logger import get_logger
@@ -489,8 +453,6 @@ def process_task(kb, task: dict, action: str, project_id: int) -> bool:
 
     elif action == "RALPH_CODER":
         return process_ralph_task(kb, task, project_id)
-
-    return False
 
     return False
 

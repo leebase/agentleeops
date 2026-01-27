@@ -3,7 +3,7 @@
 AgentLeeOps Webhook Server
 
 Listens for Kanboard webhook events and triggers agents automatically.
-When a task is moved to "2. Design Draft", runs ARCHITECT_AGENT.
+Supports all 6 agent triggers matching the orchestrator.
 
 Usage:
     python webhook_server.py
@@ -21,7 +21,7 @@ from typing import Any, cast
 from dotenv import load_dotenv
 from kanboard import Client
 
-from lib.task_fields import get_task_fields, update_status, TaskFieldError
+from lib.task_fields import get_task_fields, update_status, TaskFieldError, get_task_tags, add_task_tag, has_tag
 
 load_dotenv()
 
@@ -54,13 +54,43 @@ KB_URL = os.getenv("KANBOARD_URL", "http://localhost:88/jsonrpc.php")
 KB_USER = os.getenv("KANBOARD_USER", "jsonrpc")
 KB_TOKEN = os.getenv("KANBOARD_TOKEN")
 
-# Column that triggers ARCHITECT_AGENT
-DESIGN_DRAFT_COLUMN = "2. Design Draft"
+# Column triggers - matches orchestrator.py
+TRIGGERS = {
+    "2. Design Draft": "ARCHITECT_AGENT",
+    "3. Design Approved": "GOVERNANCE_AGENT",
+    "4. Planning Draft": "PM_AGENT",
+    "5. Plan Approved": "SPAWNER_AGENT",
+    "6. Tests Draft": "TEST_AGENT",
+    "7. Tests Approved": "GOVERNANCE_AGENT",
+    "8. Ralph Loop": "RALPH_CODER",
+}
 
-# Tags for state tracking
+# Tags for state tracking - matches orchestrator.py
 TAGS = {
-    "started": "design-started",
-    "completed": "design-generated",
+    "ARCHITECT_AGENT": {
+        "started": "design-started",
+        "completed": "design-generated",
+    },
+    "GOVERNANCE_AGENT": {
+        "started": "locking",
+        "completed": "locked",
+    },
+    "PM_AGENT": {
+        "started": "planning-started",
+        "completed": "planning-generated",
+    },
+    "SPAWNER_AGENT": {
+        "started": "spawning-started",
+        "completed": "spawned",
+    },
+    "TEST_AGENT": {
+        "started": "tests-started",
+        "completed": "tests-generated",
+    },
+    "RALPH_CODER": {
+        "started": "coding-started",
+        "completed": "coding-complete",
+    },
 }
 
 # Events we care about
@@ -75,62 +105,29 @@ def get_kb_client() -> Any:
     return Client(KB_URL, KB_USER, token)
 
 
-def get_task_tags(kb, task_id: int) -> list:
-    """Get tags for a task."""
-    try:
-        tags = kb.get_task_tags(task_id=task_id)
-        if not tags:
-            return []
-        if isinstance(tags, dict):
-            return [str(value) for value in tags.values()]
-        if isinstance(tags, list):
-            if tags and isinstance(tags[0], dict):
-                return [tag.get('name') for tag in tags if tag.get('name')]
-            return [str(tag) for tag in tags]
-        return []
-    except Exception:
-        return []
+# --- AGENT PROCESSORS ---
 
-
-def add_task_tag(kb, project_id: int, task_id: int, tag_name: str):
-    """Add a tag to a task (creates tag if needed)."""
-    try:
-        project_id = int(project_id)
-        task_id = int(task_id)
-        existing = get_task_tags(kb, task_id)
-        if tag_name in existing:
-            return
-        updated = existing + [tag_name]
-        kb.set_task_tags(project_id=project_id, task_id=task_id, tags=updated)
-    except Exception as e:
-        print(f"  Warning: Could not add tag '{tag_name}': {e}")
-
-
-def process_design_draft(task_id: int, project_id: int):
-    """Process a task that landed in Design Draft column."""
+def process_architect_task(kb, task_id: int, project_id: int):
+    """Process a task in the Design Draft column."""
     from agents.architect import run_architect_agent
 
-    kb = get_kb_client()
-
-    # Get task details
     task = cast(dict, kb.get_task(task_id=task_id))
     if not task:
         print(f"  Error: Task #{task_id} not found")
         return
 
     title = task['title']
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["ARCHITECT_AGENT"]
 
-    tag_names = get_task_tags(kb, task_id)
-
-    if TAGS["completed"] in tag_names:
+    if has_tag(tags, agent_tags["completed"]):
         print(f"  Task #{task_id} already processed, skipping")
         return
 
-    if TAGS["started"] in tag_names:
+    if has_tag(tags, agent_tags["started"]):
         print(f"  Task #{task_id} already in progress, skipping")
         return
 
-    # Get task fields (metadata API or YAML fallback)
     try:
         fields = get_task_fields(kb, task_id)
         dirname = fields["dirname"]
@@ -138,21 +135,14 @@ def process_design_draft(task_id: int, project_id: int):
         acceptance_criteria = fields.get("acceptance_criteria", "")
     except TaskFieldError as e:
         print(f"  Error: {e}")
-        kb.create_comment(
-            task_id=task_id,
-            content=f"**ARCHITECT_AGENT Error**\n\n{e}"
-        )
+        kb.create_comment(task_id=task_id, content=f"**ARCHITECT_AGENT Error**\n\n{e}")
         return
 
-    print(f"  Processing: {title}")
-    print(f"    dirname: {dirname}")
-    print(f"    context_mode: {context_mode}")
+    print(f"  Processing: {title} (dirname: {dirname})")
 
-    # Mark as started (tag + metadata)
-    add_task_tag(kb, project_id, task_id, TAGS["started"])
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
     update_status(kb, task_id, agent_status="running", current_phase="design")
 
-    # Run architect agent
     result = run_architect_agent(
         task_id=str(task_id),
         title=title,
@@ -164,14 +154,292 @@ def process_design_draft(task_id: int, project_id: int):
     )
 
     if result["success"]:
-        # Mark as completed (tag + metadata)
-        add_task_tag(kb, project_id, task_id, TAGS["completed"])
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
         update_status(kb, task_id, agent_status="completed", current_phase="design")
-        print(f"  Success: {result['design_path']}")
+        print(f"  Success: {result.get('design_path', 'DESIGN.md created')}")
     else:
         update_status(kb, task_id, agent_status="failed", current_phase="design")
         print(f"  Failed: {result['error']}")
 
+
+def process_governance_task(kb, task_id: int, project_id: int):
+    """Process a task in an Approved column (Locking)."""
+    from agents.governance import run_governance_agent
+
+    task = cast(dict, kb.get_task(task_id=task_id))
+    if not task:
+        return
+
+    title = task['title']
+    column_id = task['column_id']
+
+    # Get column name for context
+    try:
+        cols = kb.get_columns(project_id=project_id)
+        col_title = next((c['title'] for c in cols if c['id'] == int(column_id)), "")
+    except Exception:
+        col_title = ""
+
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["GOVERNANCE_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        return
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return
+
+    print(f"  Processing Governance for: {title}")
+
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+
+    result = run_governance_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        column_title=col_title,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        print(f"  Success: Artifacts locked")
+
+
+def process_pm_task(kb, task_id: int, project_id: int):
+    """Process a task in the Planning Draft column."""
+    from agents.pm import run_pm_agent
+
+    task = cast(dict, kb.get_task(task_id=task_id))
+    if not task:
+        return
+
+    title = task['title']
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["PM_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        print(f"  PM Task #{task_id} already processed, skipping")
+        return
+
+    if has_tag(tags, agent_tags["started"]):
+        print(f"  PM Task #{task_id} already in progress, skipping")
+        return
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+        context_mode = fields.get("context_mode", "NEW")
+        acceptance_criteria = fields.get("acceptance_criteria", "")
+    except TaskFieldError as e:
+        print(f"  PM Error: {e}")
+        kb.create_comment(task_id=task_id, content=f"**PM_AGENT Error**\n\n{e}")
+        return
+
+    print(f"  Processing PM: {title}")
+
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="planning")
+
+    result = run_pm_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        context_mode=context_mode,
+        acceptance_criteria=acceptance_criteria,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="planning")
+        print(f"  Success: prd.json created")
+    else:
+        update_status(kb, task_id, agent_status="failed", current_phase="planning")
+        print(f"  PM Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, content=f"**PM_AGENT Failed**\n\n{result['error']}")
+
+
+def process_spawner_task(kb, task_id: int, project_id: int):
+    """Process a task in the Plan Approved column (Fan-Out)."""
+    from agents.spawner import run_spawner_agent
+
+    # Enforce Governance first
+    tags = get_task_tags(kb, task_id)
+    if not has_tag(tags, TAGS["GOVERNANCE_AGENT"]["completed"]):
+        print("  Chaining Governance before Spawning...")
+        process_governance_task(kb, task_id, project_id)
+
+    task = cast(dict, kb.get_task(task_id=task_id))
+    if not task:
+        return
+
+    title = task['title']
+    tags = get_task_tags(kb, task_id)  # Refresh after governance
+    agent_tags = TAGS["SPAWNER_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        return
+
+    if has_tag(tags, agent_tags["started"]):
+        return
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return
+
+    print(f"  Processing Spawner for: {title}")
+
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+
+    result = run_spawner_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        print(f"  Success: Spawned {result.get('count')} child cards")
+        kb.create_comment(
+            task_id=task_id,
+            content=f"**SPAWNER**: Created {result.get('count')} child tasks in 'Tests Draft'."
+        )
+    else:
+        print(f"  Spawner Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, content=f"**SPAWNER Failed**\n\n{result['error']}")
+
+
+def process_test_task(kb, task_id: int, project_id: int):
+    """Process a task in the Tests Draft column."""
+    from agents.test_agent import run_test_agent
+
+    task = cast(dict, kb.get_task(task_id=task_id))
+    if not task:
+        return
+
+    title = task['title']
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["TEST_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        return
+
+    if has_tag(tags, agent_tags["started"]):
+        return
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return
+
+    print(f"  Processing Test Generation: {title}")
+
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="tests")
+
+    result = run_test_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="tests")
+        print(f"  Success: Created {result.get('test_file', 'test file')}")
+        kb.create_comment(
+            task_id=task_id,
+            content=f"**TEST_AGENT**: Created test file.\n\nReady for Human Review."
+        )
+    else:
+        update_status(kb, task_id, agent_status="failed", current_phase="tests")
+        print(f"  Test Agent Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, content=f"**TEST_AGENT Failed**\n\n{result['error']}")
+
+
+def process_ralph_task(kb, task_id: int, project_id: int):
+    """Process a task in the Ralph Loop column."""
+    from agents.ralph import run_ralph_agent
+
+    task = cast(dict, kb.get_task(task_id=task_id))
+    if not task:
+        return
+
+    title = task['title']
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["RALPH_CODER"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        return
+
+    if has_tag(tags, agent_tags["started"]):
+        return
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return
+
+    print(f"  Processing Ralph Loop: {title}")
+
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="coding")
+
+    result = run_ralph_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="coding")
+        print(f"  Success: Green Bar in {result.get('iterations', '?')} iterations")
+        kb.create_comment(
+            task_id=task_id,
+            content=f"**RALPH**: Tests passed in {result.get('iterations', '?')} iterations. Code committed."
+        )
+    else:
+        update_status(kb, task_id, agent_status="failed", current_phase="coding")
+        print(f"  Ralph Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, content=f"**RALPH Failed**\n\n{result['error']}")
+
+
+def process_task(kb, task_id: int, project_id: int, action: str):
+    """Route task to appropriate agent based on column."""
+    print(f"  Triggering {action}...")
+
+    if action == "ARCHITECT_AGENT":
+        process_architect_task(kb, task_id, project_id)
+    elif action == "GOVERNANCE_AGENT":
+        process_governance_task(kb, task_id, project_id)
+    elif action == "PM_AGENT":
+        process_pm_task(kb, task_id, project_id)
+    elif action == "SPAWNER_AGENT":
+        process_spawner_task(kb, task_id, project_id)
+    elif action == "TEST_AGENT":
+        process_test_task(kb, task_id, project_id)
+    elif action == "RALPH_CODER":
+        process_ralph_task(kb, task_id, project_id)
+
+
+# --- HTTP HANDLER ---
 
 class WebhookHandler(BaseHTTPRequestHandler):
     """Handle incoming webhook requests from Kanboard."""
@@ -255,11 +523,11 @@ class WebhookHandler(BaseHTTPRequestHandler):
             print(f"  Error looking up column: {e}")
             return
 
-        print(f"  Task #{task_id} moved to column: {column_name}")
+        print(f"  Task #{task_id} in column: {column_name}")
 
-        if column_name == DESIGN_DRAFT_COLUMN:
-            print("  Triggering ARCHITECT_AGENT...")
-            process_design_draft(int(task_id), int(project_id))
+        if column_name in TRIGGERS:
+            action = TRIGGERS[column_name]
+            process_task(kb, int(task_id), int(project_id), action)
         else:
             print(f"  Column '{column_name}' is not a trigger column")
 
@@ -299,7 +567,8 @@ def run_server(port: int = 5000):
     print(f"Configure Kanboard webhook URL to: http://<your-ip>:{port}/")
     print(f"")
     print(f"Triggers:")
-    print(f"  - Task moved to '{DESIGN_DRAFT_COLUMN}' -> ARCHITECT_AGENT")
+    for column, agent in TRIGGERS.items():
+        print(f"  - '{column}' -> {agent}")
     print(f"")
     print(f"Press Ctrl+C to stop.\n")
 

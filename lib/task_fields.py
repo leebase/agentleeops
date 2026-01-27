@@ -245,3 +245,70 @@ def validate_task_fields(fields: dict) -> tuple:
             )
 
     return True, ""
+
+
+# --- Tag Helper Functions ---
+# Used by orchestrator and webhook_server for idempotency tracking
+
+def get_task_tags(kb_client: Any, task_id: int) -> list:
+    """
+    Get tags for a task.
+
+    Args:
+        kb_client: Kanboard client instance
+        task_id: Task ID to fetch tags for
+
+    Returns:
+        List of tag names (strings)
+    """
+    try:
+        tags = kb_client.get_task_tags(task_id=task_id)
+        if not tags:
+            return []
+        if isinstance(tags, dict):
+            return [str(value) for value in tags.values()]
+        if isinstance(tags, list):
+            if tags and isinstance(tags[0], dict):
+                return [tag.get('name') for tag in tags if tag.get('name')]
+            return [str(tag) for tag in tags]
+        return []
+    except Exception:
+        return []
+
+
+def add_task_tag(kb_client: Any, project_id: int, task_id: int, tag_name: str) -> None:
+    """
+    Add a tag to a task (creates tag if needed).
+
+    Args:
+        kb_client: Kanboard client instance
+        project_id: Project ID
+        task_id: Task ID
+        tag_name: Tag name to add
+    """
+    try:
+        project_id = int(project_id)
+        task_id = int(task_id)
+        existing = get_task_tags(kb_client, task_id)
+        if tag_name in existing:
+            return
+        updated = existing + [tag_name]
+        kb_client.set_task_tags(project_id=project_id, task_id=task_id, tags=updated)
+    except Exception as e:
+        from lib.logger import get_logger
+        log = get_logger("TAGS")
+        log.warning(f"Could not add tag '{tag_name}': {e}", task_id=task_id)
+
+
+def has_tag(tags: list, tag_name: str) -> bool:
+    """
+    Check if a tag is in the tags list.
+
+    Args:
+        tags: List of tag names
+        tag_name: Tag name to check for
+
+    Returns:
+        True if tag is present, False otherwise
+    """
+    return tag_name in tags

@@ -14,6 +14,7 @@ from pathlib import Path
 from lib.opencode import run_opencode
 from lib.task_fields import get_task_fields
 from lib.workspace import get_workspace_path, safe_write_file
+from lib.syntax_guard import safe_extract_python
 
 PROMPT_TEMPLATE = Path("prompts/test_prompt.txt")
 
@@ -83,17 +84,15 @@ def run_test_agent(task_id: str, title: str, dirname: str, kb_client, project_id
     print(f"  [Test Agent] Asking LLM to write tests/test_{atomic_id_clean}.py...")
     llm_response = run_opencode(prompt, model="gpt-4o")
 
-    # 6. Extract Code
+    # 6. Extract and Validate Code (Syntax Guard)
+    code_block, syntax_error = safe_extract_python(llm_response)
+    if syntax_error:
+        return {"success": False, "error": f"LLM returned invalid test code: {syntax_error}"}
+
     try:
-        code_block = llm_response
-        if "```python" in code_block:
-            code_block = code_block.split("```python")[1].split("```")[0].strip()
-        elif "```" in code_block:
-            code_block = code_block.split("```")[1].split("```")[0].strip()
-        
         test_filename = f"test_{atomic_id_clean}.py"
         test_file_path = tests_dir / test_filename
-        
+
         # Use safe_write_file, treating "tests/..." as relative path
         relative_path = f"tests/{test_filename}"
         safe_write_file(workspace, relative_path, code_block)

@@ -4,6 +4,7 @@ from pathlib import Path
 from lib.opencode import run_opencode
 from lib.task_fields import get_task_fields
 from lib.workspace import get_workspace_path, safe_write_file
+from lib.syntax_guard import safe_extract_json
 
 PROMPT_TEMPLATE = Path("prompts/planning_prompt.txt")
 
@@ -43,31 +44,24 @@ def run_pm_agent(task_id: str, title: str, dirname: str, context_mode: str, acce
     print("  [PM Agent] Generating PRD via LLM...")
     llm_response = run_opencode(prompt, model="gpt-4o") # Use smart model for planning
 
-    # 5. Extract and Validate JSON
+    # 5. Extract and Validate JSON (Syntax Guard)
+    clean_json, syntax_error = safe_extract_json(llm_response)
+    if syntax_error:
+        # Save raw output for debugging
+        error_file = workspace / "prd_error.txt"
+        error_file.write_text(llm_response)
+        return {"success": False, "error": f"LLM generated invalid JSON. Saved to {error_file}. {syntax_error}"}
+
     try:
-        # Attempt to clean markdown code blocks if present
-        clean_json = llm_response.strip()
-        if clean_json.startswith("```json"):
-            clean_json = clean_json.replace("```json", "", 1)
-        if clean_json.startswith("```"):
-             clean_json = clean_json.replace("```", "", 1)
-        if clean_json.endswith("```"):
-            clean_json = clean_json.rsplit("```", 1)[0]
-        
-        prd_data = json.loads(clean_json.strip())
-        
+        prd_data = json.loads(clean_json)
+
         # Basic Schema Validation
         if "stories" not in prd_data or not isinstance(prd_data["stories"], list):
             raise ValueError("JSON missing 'stories' list")
-        
-        if not prd_data["stories"]:
-             raise ValueError("PRD has no stories")
 
-    except json.JSONDecodeError as e:
-        # Fallback: Save the raw output for debugging
-        error_file = workspace / "prd_error.txt"
-        error_file.write_text(llm_response)
-        return {"success": False, "error": f"LLM generated invalid JSON. Saved to {error_file}. Error: {e}"}
+        if not prd_data["stories"]:
+            raise ValueError("PRD has no stories")
+
     except ValueError as e:
         return {"success": False, "error": f"Invalid PRD Schema: {e}"}
 
