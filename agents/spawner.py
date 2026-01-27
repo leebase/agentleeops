@@ -7,6 +7,7 @@ Responsibility:
 3. Spawns Child Cards in 'Tests Draft' (Column 6)
    - USES DUPLICATION HACK to bypass MetaMagik mandatory field issues.
 4. Links Child Cards to Parent
+5. IMPLEMENTS IDEMPOTENCY, FLOOD CONTROL, and TRANSACTION SAFETY.
 """
 
 import json
@@ -14,9 +15,35 @@ from pathlib import Path
 from lib.workspace import get_workspace_path
 from lib.task_fields import get_task_fields, update_status
 
+MAX_CHILDREN_PER_EPIC = 20
+
+def get_existing_child_atomic_ids(kb_client, parent_id: int):
+    """
+    Fetch all linked children and extract their atomic_id metadata.
+    """
+    existing_ids = set()
+    try:
+        # Get tasks linked to parent
+        links = kb_client.get_task_links(task_id=parent_id)
+        if not links:
+            return existing_ids
+            
+        for link in links:
+            # We want the opposite task if we are the parent
+            child_id = link.get("opposite_task_id")
+            if child_id:
+                # Fetch metadata for the child
+                meta = kb_client.execute("getTaskMetadata", task_id=int(child_id))
+                if meta and "atomic_id" in meta:
+                    existing_ids.add(meta["atomic_id"])
+    except Exception as e:
+        print(f"  [Spawner] Warning: Failed to fetch existing children: {e}")
+    
+    return existing_ids
+
 def run_spawner_agent(task_id: str, title: str, dirname: str, kb_client, project_id: int):
     """
-    Executes the Fan-Out Logic using the Duplication Hack.
+    Executes the Fan-Out Logic with safety rails.
     """
     print(f"  [Spawner] Starting fan-out for '{title}'...")
 
@@ -40,16 +67,29 @@ def run_spawner_agent(task_id: str, title: str, dirname: str, kb_client, project
     if not stories:
         return {"success": False, "error": "prd.json contains no stories."}
 
-    # 3. Get Parent Context
+    # 3. Flood Control
+    if len(stories) > MAX_CHILDREN_PER_EPIC:
+        return {
+            "success": False, 
+            "error": f"Flood Control: PRD requests {len(stories)} stories, but limit is {MAX_CHILDREN_PER_EPIC}. Aborting."
+        }
+
+    # 4. Get Parent Context
     try:
         parent_fields = get_task_fields(kb_client, int(task_id))
         context_mode = parent_fields.get("context_mode", "NEW")
     except Exception as e:
          return {"success": False, "error": f"Failed to get parent context: {e}"}
 
+    # 5. Idempotency: Check what's already spawned
+    existing_atomic_ids = get_existing_child_atomic_ids(kb_client, int(task_id))
+    if existing_atomic_ids:
+        print(f"  [Spawner] Found {len(existing_atomic_ids)} existing child tasks. Skipping duplicates.")
+
     spawned_count = 0
+    skipped_count = 0
     
-    # 4. Find destination column ID (Column 6: "Tests Draft")
+    # 6. Find destination column ID (Column 6: "Tests Draft")
     try:
         cols = kb_client.get_columns(project_id=project_id)
         dest_col = next((c for c in cols if "Tests Draft" in c['title']), None)
@@ -59,24 +99,32 @@ def run_spawner_agent(task_id: str, title: str, dirname: str, kb_client, project
     except Exception as e:
         return {"success": False, "error": f"Failed to get board columns: {e}"}
 
-    print(f"  [Spawner] Found {len(stories)} stories. Spawning via Duplication of Task #{task_id}...")
+    print(f"  [Spawner] Processing {len(stories)} stories...")
 
     for story in stories:
         atomic_id = story.get("id")
         story_title = story.get("title")
+        
+        if not atomic_id:
+            print("    [Spawner] Warning: Story missing ID. Skipping.")
+            continue
+            
+        if atomic_id in existing_atomic_ids:
+            print(f"    . Already exists: {atomic_id}. Skipping.")
+            skipped_count += 1
+            continue
+
         child_title = f"[{atomic_id}] {story_title}"
+        new_task_id = None
         
         try:
-            # THE HACK: Duplicate the Parent Task to Project 1
-            # This creates a task with all MetaMagik fields satisfied.
+            # TRANSACTION START: Duplicate the Parent Task
             new_task_id = kb_client.execute("duplicateTaskToProject", task_id=int(task_id), project_id=project_id)
             
             if not new_task_id:
-                print(f"    Failed to duplicate task for {atomic_id}.")
-                continue
+                raise RuntimeError(f"API returned no ID for duplicate of {atomic_id}")
 
-            # 5. Clean up the Duplicate
-            # Update Title, Description, and move to Column 6
+            # TRANSACTION STEP 2: Update Content
             description = (
                 f"**Atomic Story**: {atomic_id}\n"
                 f"**Parent**: #{task_id}\n\n"
@@ -91,8 +139,7 @@ def run_spawner_agent(task_id: str, title: str, dirname: str, kb_client, project
                 column_id=dest_col_id
             )
 
-            # 6. Set Metadata
-            # dirname and context_mode are already copied by duplicate, but we ensure consistency
+            # TRANSACTION STEP 3: Set Metadata
             metadata = {
                 "atomic_id": atomic_id,
                 "parent_id": str(task_id),
@@ -100,20 +147,34 @@ def run_spawner_agent(task_id: str, title: str, dirname: str, kb_client, project
             }
             kb_client.execute("saveTaskMetadata", task_id=int(new_task_id), values=metadata)
             
-            # 7. Link to Parent
-            try:
-                # Link type 1: "relates to"
-                kb_client.create_task_link(task_id=int(new_task_id), opposite_task_id=int(task_id), link_id=1)
-            except Exception as link_e:
-                print(f"    Warning: Link failed: {link_e}")
+            # TRANSACTION STEP 4: Link to Parent
+            # Link type 1: "relates to"
+            res = kb_client.create_task_link(task_id=int(new_task_id), opposite_task_id=int(task_id), link_id=1)
+            if not res:
+                # Linking is secondary but nice to have. We won't roll back just for a link failure
+                # unless you want strict adherence. Let's just log it.
+                print(f"    Warning: Could not link #{new_task_id} to parent.")
 
             print(f"    + Created Child #{new_task_id}: {child_title}")
             spawned_count += 1
 
         except Exception as e:
-            print(f"    Error duplicating for {atomic_id}: {e}")
+            print(f"    ❌ Error spawning {atomic_id}: {e}")
+            # TRANSACTION ROLLBACK: Delete orphan if we have an ID
+            if new_task_id:
+                print(f"    [Rollback] Deleting orphan task #{new_task_id}...")
+                try:
+                    kb_client.execute("removeTask", task_id=int(new_task_id))
+                except Exception as rollback_e:
+                    print(f"    [Critical] Rollback failed for #{new_task_id}: {rollback_e}")
 
-    if spawned_count > 0:
-        return {"success": True, "count": spawned_count}
+    # 7. Summary
+    if spawned_count > 0 or skipped_count > 0:
+        return {
+            "success": True, 
+            "count": spawned_count, 
+            "skipped": skipped_count,
+            "total": len(stories)
+        }
     else:
-        return {"success": False, "error": "No tasks created."}
+        return {"success": False, "error": "No tasks created or skipped."}
