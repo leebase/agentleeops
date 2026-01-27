@@ -24,13 +24,14 @@ def get_existing_child_atomic_ids(kb_client, parent_id: int):
     existing_ids = set()
     try:
         # Get tasks linked to parent
-        links = kb_client.get_task_links(task_id=parent_id)
+        links = kb_client.execute("getAllTaskLinks", task_id=parent_id)
         if not links:
             return existing_ids
             
         for link in links:
-            # We want the opposite task if we are the parent
-            child_id = link.get("opposite_task_id")
+            # getAllTaskLinks returns tasks linked to parent_id
+            # task_id in the result is the linked task
+            child_id = link.get("task_id")
             if child_id:
                 # Fetch metadata for the child
                 meta = kb_client.execute("getTaskMetadata", task_id=int(child_id))
