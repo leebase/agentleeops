@@ -73,7 +73,6 @@ def connect_kb():
     """Connect to Kanboard API."""
     if not KB_TOKEN:
         print("Error: KANBOARD_TOKEN not set. Create a .env file with your token.")
-        print("See .env.example for template.")
         sys.exit(1)
 
     try:
@@ -111,13 +110,17 @@ def add_task_tag(kb, project_id: int, task_id: int, tag_name: str):
         updated = existing + [tag_name]
         kb.set_task_tags(project_id=project_id, task_id=task_id, tags=updated)
     except Exception as e:
-        print(f"  Warning: Could not add tag '{tag_name}': {e}")
+        log.warning(f"Could not add tag '{tag_name}': {e}", task_id=task_id)
 
 
 def has_tag(tags: list, tag_name: str) -> bool:
     """Check if a tag is in the tags list."""
     return tag_name in tags
 
+
+from lib.logger import get_logger
+
+log = get_logger("ORCHESTRATOR")
 
 def process_architect_task(kb, task: dict, project_id: int) -> bool:
     """
@@ -137,11 +140,11 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
     agent_tags = TAGS["ARCHITECT_AGENT"]
 
     if has_tag(tags, agent_tags["completed"]):
-        print(f"  Task #{task_id} already processed (has {agent_tags['completed']} tag)")
+        log.info("Task already processed", task_id=task_id)
         return False
 
     if has_tag(tags, agent_tags["started"]):
-        print(f"  Task #{task_id} already in progress (has {agent_tags['started']} tag)")
+        log.info("Task already in progress", task_id=task_id)
         return False
 
     # Get task fields (metadata API or YAML fallback)
@@ -151,16 +154,15 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
         context_mode = fields.get("context_mode", "NEW")
         acceptance_criteria = fields.get("acceptance_criteria", "")
     except TaskFieldError as e:
-        print(f"  Error: {e}")
+        log.error(f"Field error: {e}", task_id=task_id)
         kb.create_comment(
             task_id=task_id,
+            user_id=1,
             content=f"**ARCHITECT_AGENT Error**\n\n{e}"
         )
         return False
 
-    print(f"  Processing: {title}")
-    print(f"    dirname: {dirname}")
-    print(f"    context_mode: {context_mode}")
+    log.info(f"Processing Architect: {title}", task_id=task_id, dirname=dirname)
 
     # Mark as started (tag + metadata)
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
@@ -181,11 +183,12 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
         # Mark as completed (tag + metadata)
         add_task_tag(kb, project_id, task_id, agent_tags["completed"])
         update_status(kb, task_id, agent_status="completed", current_phase="design")
-        print(f"  Success: DESIGN.md written to {result['design_path']}")
+        log.info(f"Success: DESIGN.md written", task_id=task_id)
         return True
     else:
         update_status(kb, task_id, agent_status="failed", current_phase="design")
-        print(f"  Failed: {result['error']}")
+        # Remove started tag to allow retry? No, let human intervene for now.
+        log.error(f"Failed: {result['error']}", task_id=task_id)
         return False
 
 
@@ -203,11 +206,11 @@ def process_pm_task(kb, task: dict, project_id: int) -> bool:
     agent_tags = TAGS["PM_AGENT"]
 
     if has_tag(tags, agent_tags["completed"]):
-        print(f"  Task #{task_id} already processed (has {agent_tags['completed']} tag)")
+        log.info("PM Task already processed", task_id=task_id)
         return False
 
     if has_tag(tags, agent_tags["started"]):
-        print(f"  Task #{task_id} already in progress (has {agent_tags['started']} tag)")
+        log.info("PM Task already in progress", task_id=task_id)
         return False
 
     # Get task fields
@@ -217,11 +220,11 @@ def process_pm_task(kb, task: dict, project_id: int) -> bool:
         context_mode = fields.get("context_mode", "NEW")
         acceptance_criteria = fields.get("acceptance_criteria", "")
     except TaskFieldError as e:
-        print(f"  Error: {e}")
-        kb.create_comment(task_id=task_id, user_id=1, content=f"**PM_AGENT Error**\n\n{e}")
+        log.error(f"PM Error: {e}", task_id=task_id)
+        kb.create_comment(task_id=task_id, content=f"**PM_AGENT Error**\n\n{e}")
         return False
 
-    print(f"  Processing: {title}")
+    log.info(f"Processing PM: {title}", task_id=task_id)
 
     # Mark as started
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
@@ -241,12 +244,12 @@ def process_pm_task(kb, task: dict, project_id: int) -> bool:
     if result["success"]:
         add_task_tag(kb, project_id, task_id, agent_tags["completed"])
         update_status(kb, task_id, agent_status="completed", current_phase="planning")
-        print(f"  Success: prd.json written with {result['story_count']} stories.")
+        log.info(f"Success: prd.json written", task_id=task_id)
         return True
     else:
         update_status(kb, task_id, agent_status="failed", current_phase="planning")
-        print(f"  Failed: {result['error']}")
-        kb.create_comment(task_id=task_id, user_id=1, content=f"**PM_AGENT Failed**\n\n{result['error']}")
+        log.error(f"PM Failed: {result['error']}", task_id=task_id)
+        kb.create_comment(task_id=task_id, content=f"**PM_AGENT Failed**\n\n{result['error']}")
         return False
 
 
@@ -279,8 +282,9 @@ def process_governance_task(kb, task: dict, project_id: int) -> bool:
     except TaskFieldError:
         return False
 
-    print(f"  Processing Governance for: {title}")
+    log.info(f"Processing Governance for: {title}", task_id=task_id)
     
+    # No started tag needed for instant locking usually, but good for tracing
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
     
     result = run_governance_agent(
@@ -307,7 +311,7 @@ def process_spawner_task(kb, task: dict, project_id: int) -> bool:
     # 1. Enforce Governance First
     tags = get_task_tags(kb, task['id'])
     if not has_tag(tags, TAGS["GOVERNANCE_AGENT"]["completed"]):
-        print("  [Orchestrator] Chaining Governance before Spawning...")
+        log.info("Chaining Governance before Spawning...", task_id=task['id'])
         process_governance_task(kb, task, project_id)
         # Refresh tags not strictly needed if we assume it worked or check result
     
@@ -332,7 +336,7 @@ def process_spawner_task(kb, task: dict, project_id: int) -> bool:
     except TaskFieldError:
         return False
 
-    print(f"  Processing Spawner for: {title}")
+    log.info(f"Processing Spawner for: {title}", task_id=task_id)
     
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
     # No status update needed? Or maybe "spawning"
@@ -347,13 +351,13 @@ def process_spawner_task(kb, task: dict, project_id: int) -> bool:
 
     if result["success"]:
         add_task_tag(kb, project_id, task_id, agent_tags["completed"])
-        print(f"  Success: Spawned {result['count']} child cards.")
-        kb.create_comment(task_id=task_id, user_id=1, content=f"**SPAWNER**: Automatically created {result['count']} child tasks in 'Tests Draft'.")
+        log.info(f"Success: Spawned {result.get('count')} child cards", task_id=task_id)
+        kb.create_comment(task_id=task_id, user_id=1, content=f"**SPAWNER**: Automatically created {result.get('count')} child tasks in 'Tests Draft'.")
         return True
     else:
         # If failed, remove started tag so it retries? Or tag failed?
         # For now, just log.
-        print(f"  Failed: {result['error']}")
+        log.error(f"Spawner Failed: {result['error']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**SPAWNER Failed**\n\n{result['error']}")
         return False
 
@@ -381,7 +385,7 @@ def process_test_task(kb, task: dict, project_id: int) -> bool:
     except TaskFieldError:
         return False
 
-    print(f"  Processing Test Generation for: {title}")
+    log.info(f"Processing Test Generation: {title}", task_id=task_id)
     
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
     update_status(kb, task_id, agent_status="running", current_phase="tests")
@@ -397,12 +401,12 @@ def process_test_task(kb, task: dict, project_id: int) -> bool:
     if result["success"]:
         add_task_tag(kb, project_id, task_id, agent_tags["completed"])
         update_status(kb, task_id, agent_status="completed", current_phase="tests")
-        print(f"  Success: Created {result['test_file']}")
+        log.info(f"Success: Created {result['test_file']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**TEST_AGENT**: Created test file `{result['test_file']}`.\n\nReady for Human Review.")
         return True
     else:
         update_status(kb, task_id, agent_status="failed", current_phase="tests")
-        print(f"  Failed: {result['error']}")
+        log.error(f"Test Agent Failed: {result['error']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**TEST_AGENT Failed**\n\n{result['error']}")
         return False
 
@@ -430,7 +434,7 @@ def process_ralph_task(kb, task: dict, project_id: int) -> bool:
     except TaskFieldError:
         return False
 
-    print(f"  Processing Ralph Loop for: {title}")
+    log.info(f"Processing Ralph Loop: {title}", task_id=task_id)
     
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
     update_status(kb, task_id, agent_status="running", current_phase="coding")
@@ -446,12 +450,12 @@ def process_ralph_task(kb, task: dict, project_id: int) -> bool:
     if result["success"]:
         add_task_tag(kb, project_id, task_id, agent_tags["completed"])
         update_status(kb, task_id, agent_status="completed", current_phase="coding")
-        print(f"  Success: Green Bar in {result['iterations']} iterations.")
+        log.info(f"Success: Green Bar in {result['iterations']} iterations", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**RALPH**: Tests passed in {result['iterations']} iterations. Code committed.")
         return True
     else:
         update_status(kb, task_id, agent_status="failed", current_phase="coding")
-        print(f"  Failed: {result['error']}")
+        log.error(f"Ralph Failed: {result['error']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**RALPH Failed**\n\n{result['error']}")
         return False
 
@@ -466,7 +470,7 @@ def process_task(kb, task: dict, action: str, project_id: int) -> bool:
     task_id = task['id']
     title = task['title']
 
-    print(f"Triggering {action} for Task #{task_id}: {title}")
+    log.info(f"Triggering {action}", task_id=task_id, action=action)
 
     if action == "ARCHITECT_AGENT":
         return process_architect_task(kb, task, project_id)
@@ -496,7 +500,7 @@ def run_once(kb, project_id: int = 1):
     Single-run mode: Process one card and exit.
     Looks for cards in trigger columns that haven't been processed yet.
     """
-    print(f"Single-run mode: checking for work...")
+    log.info("Single-run mode: checking for work...")
 
     # Get column mapping
     cols = kb.get_columns(project_id=project_id)
@@ -525,24 +529,22 @@ def run_once(kb, project_id: int = 1):
 
             # Found an unprocessed task
             if process_task(kb, task, action, project_id):
-                print("Done.")
+                log.info("Run Once completed successfully.")
                 return
             else:
                 # Task wasn't fully processed, but we tried
-                print("Task processing did not complete successfully.")
+                log.warning("Task processing did not complete successfully.")
                 return
 
-    print("No unprocessed tasks found in trigger columns.")
+    log.info("No unprocessed tasks found in trigger columns.")
 
 
 def run_polling(kb, project_id: int = 1, poll_interval: int = 5):
     """
     Polling mode: Continuously watch for cards in trigger columns.
     """
-    print(f"Polling mode: watching {KB_URL}")
-    print(f"Poll interval: {poll_interval}s")
-    print("Press Ctrl+C to stop.\n")
-
+    log.info(f"Polling mode: watching {KB_URL}", poll_interval=poll_interval)
+    
     # Get column mapping
     cols = kb.get_columns(project_id=project_id)
     col_map = {c['title']: c['id'] for c in cols}
@@ -579,10 +581,10 @@ def run_polling(kb, project_id: int = 1, poll_interval: int = 5):
                     process_task(kb, task, action, project_id)
 
         except KeyboardInterrupt:
-            print("\nStopping orchestrator.")
+            log.info("Stopping orchestrator.")
             break
         except Exception as e:
-            print(f"Polling Error: {e}")
+            log.error(f"Polling Error: {e}")
 
         time.sleep(poll_interval)
 

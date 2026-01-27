@@ -123,6 +123,8 @@ def _get_opencode_subcommand() -> str:
     return os.getenv("OPENCODE_SUBCOMMAND", "run")
 
 
+from lib.trace import log_trace
+
 def _call_opencode_cli(prompt: str, model: Optional[str], timeout: int) -> str:
     cmd = [_get_opencode_cmd()]
     subcommand = _get_opencode_subcommand()
@@ -157,7 +159,9 @@ def _call_opencode_cli(prompt: str, model: Optional[str], timeout: int) -> str:
     if result.returncode != 0:
         raise LLMError(f"OpenCode CLI failed: {result.stderr}")
 
-    return result.stdout.strip()
+    response = result.stdout.strip()
+    log_trace("OpenCode", model or "default", prompt, response)
+    return response
 
 
 def _call_openrouter(prompt: str, timeout: int) -> str:
