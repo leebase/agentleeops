@@ -1,16 +1,40 @@
 """
 Workspace management for AgentLeeOps.
 Handles creation and setup of project workspaces based on context mode.
+Enforces Ratchet Governance for file writes.
 """
 
 import subprocess
+import os
 from pathlib import Path
-
+from lib.ratchet import check_write_permission
 
 def get_workspace_path(dirname: str) -> Path:
     """Get the path to a workspace directory."""
     return Path.home() / "projects" / dirname
 
+def safe_write_file(workspace: Path, relative_path: str, content: str, force: bool = False):
+    """
+    Write content to a file, strictly enforcing the Ratchet Guard.
+    
+    Args:
+        workspace: Base workspace path
+        relative_path: Path relative to workspace (e.g., "DESIGN.md")
+        content: String content to write
+        force: If True, bypass checks (Use with caution!)
+        
+    Raises:
+        PermissionError: If file is LOCKED.
+    """
+    full_path = workspace / relative_path
+    
+    # Ratchet Check
+    if not force and full_path.exists():
+        if not check_write_permission(workspace, relative_path):
+            raise PermissionError(f"RATCHET GUARD: {relative_path} is LOCKED. Cannot overwrite.")
+
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_text(content)
 
 def setup_workspace(dirname: str, context_mode: str) -> Path:
     """
@@ -42,6 +66,10 @@ def setup_workspace(dirname: str, context_mode: str) -> Path:
             )
             if result.returncode != 0:
                 raise RuntimeError(f"Failed to init git repo: {result.stderr}")
+        
+        # Init Ratchet
+        ratchet_dir = path / ".agentleeops"
+        ratchet_dir.mkdir(exist_ok=True)
 
         return path
 

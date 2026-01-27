@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from lib.opencode import run_opencode
 from lib.task_fields import get_task_fields
-from lib.workspace import get_workspace_path
+from lib.workspace import get_workspace_path, safe_write_file
 
 PROMPT_TEMPLATE = Path("prompts/test_prompt.txt")
 
@@ -93,7 +93,10 @@ def run_test_agent(task_id: str, title: str, dirname: str, kb_client, project_id
         
         test_filename = f"test_{atomic_id_clean}.py"
         test_file_path = tests_dir / test_filename
-        test_file_path.write_text(code_block)
+        
+        # Use safe_write_file, treating "tests/..." as relative path
+        relative_path = f"tests/{test_filename}"
+        safe_write_file(workspace, relative_path, code_block)
         print(f"  [Test Agent] Wrote {test_file_path}")
 
     except Exception as e:

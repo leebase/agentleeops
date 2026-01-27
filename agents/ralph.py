@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 from lib.opencode import run_opencode
 from lib.task_fields import get_task_fields
-from lib.workspace import get_workspace_path
+from lib.workspace import get_workspace_path, safe_write_file
 
 PROMPT_TEMPLATE = Path("prompts/ralph_prompt.txt")
 MAX_RETRIES = 5
@@ -48,9 +48,10 @@ def run_ralph_agent(task_id: str, title: str, dirname: str, kb_client, project_i
     # Infer source file
     src_dir = workspace / "src"
     src_dir.mkdir(parents=True, exist_ok=True)
-    source_file = src_dir / f"{dirname.replace('-', '_')}.py"
+    source_filename = f"{dirname.replace('-', '_')}.py"
+    source_file = src_dir / source_filename
     if not source_file.exists():
-        source_file.write_text("") # Touch
+        safe_write_file(workspace, f"src/{source_filename}", "") # Touch
 
     # 2. Git Branch
     branch_name = f"feat/{task_id}-{atomic_id_clean}"
@@ -100,7 +101,7 @@ def run_ralph_agent(task_id: str, title: str, dirname: str, kb_client, project_i
             elif "```" in new_code:
                 new_code = new_code.split("```")[1].split("```")[0].strip()
             
-            source_file.write_text(new_code)
+            safe_write_file(workspace, f"src/{source_filename}", new_code)
         except Exception:
             print("    Failed to parse LLM output")
             continue

@@ -32,9 +32,11 @@ KB_TOKEN = os.getenv("KANBOARD_TOKEN")
 # Updated to match Product Definition v1.1 (Context-Reset TDD)
 TRIGGERS = {
     "2. Design Draft": "ARCHITECT_AGENT",
-    "4. Planning Draft": "PM_AGENT",      # Moved up (was col 6)
-    "5. Plan Approved": "SPAWNER_AGENT",  # New: Fan-Out Trigger
-    "6. Tests Draft": "TEST_AGENT",       # Moved down & renamed (was col 4 Scaffold)
+    "3. Design Approved": "GOVERNANCE_AGENT",
+    "4. Planning Draft": "PM_AGENT",
+    "5. Plan Approved": "SPAWNER_AGENT",  # Also runs Governance
+    "6. Tests Draft": "TEST_AGENT",
+    "7. Tests Approved": "GOVERNANCE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
 }
 
@@ -43,6 +45,10 @@ TAGS = {
     "ARCHITECT_AGENT": {
         "started": "design-started",
         "completed": "design-generated",
+    },
+    "GOVERNANCE_AGENT": {
+        "started": "locking",
+        "completed": "locked",
     },
     "PM_AGENT": {
         "started": "planning-started",
@@ -244,16 +250,70 @@ def process_pm_task(kb, task: dict, project_id: int) -> bool:
         return False
 
 
+def process_governance_task(kb, task: dict, project_id: int) -> bool:
+    """
+    Process a task in an Approved column (Locking).
+    """
+    from agents.governance import run_governance_agent
+
+    task_id = task['id']
+    title = task['title']
+    
+    try:
+        task_details = kb.get_task(task_id=task_id)
+        col_id = task_details['column_id']
+        cols = kb.get_columns(project_id=project_id)
+        col_title = next((c['title'] for c in cols if c['id'] == int(col_id)), "")
+    except Exception:
+        return False
+
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["GOVERNANCE_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        return False
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return False
+
+    print(f"  Processing Governance for: {title}")
+    
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    
+    result = run_governance_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        column_title=col_title,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        return True
+    return False
+
+
 def process_spawner_task(kb, task: dict, project_id: int) -> bool:
     """
     Process a task in the Plan Approved column (Fan-Out).
     """
     from agents.spawner import run_spawner_agent
-
+    
+    # 1. Enforce Governance First
+    tags = get_task_tags(kb, task['id'])
+    if not has_tag(tags, TAGS["GOVERNANCE_AGENT"]["completed"]):
+        print("  [Orchestrator] Chaining Governance before Spawning...")
+        process_governance_task(kb, task, project_id)
+        # Refresh tags not strictly needed if we assume it worked or check result
+    
     task_id = task['id']
     title = task['title']
 
-    tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["SPAWNER_AGENT"]
 
     # Only run if not already spawned
@@ -410,6 +470,9 @@ def process_task(kb, task: dict, action: str, project_id: int) -> bool:
 
     if action == "ARCHITECT_AGENT":
         return process_architect_task(kb, task, project_id)
+
+    elif action == "GOVERNANCE_AGENT":
+        return process_governance_task(kb, task, project_id)
 
     elif action == "PM_AGENT":
         return process_pm_task(kb, task, project_id)

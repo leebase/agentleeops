@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from lib.opencode import run_opencode
 from lib.task_fields import get_task_fields
-from lib.workspace import get_workspace_path
+from lib.workspace import get_workspace_path, safe_write_file
 
 PROMPT_TEMPLATE = Path("prompts/planning_prompt.txt")
 
@@ -74,7 +74,7 @@ def run_pm_agent(task_id: str, title: str, dirname: str, context_mode: str, acce
     # 6. Save prd.json
     try:
         # format nicely
-        prd_path.write_text(json.dumps(prd_data, indent=2))
+        safe_write_file(workspace, "prd.json", json.dumps(prd_data, indent=2))
         print(f"  [PM Agent] Saved {prd_path}")
     except Exception as e:
         return {"success": False, "error": f"Failed to write prd.json: {e}"}

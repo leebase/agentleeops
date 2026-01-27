@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from lib.opencode import call_opencode, OpenCodeError
-from lib.workspace import setup_workspace, validate_dirname
+from lib.workspace import setup_workspace, validate_dirname, safe_write_file
 
 
 # Load prompt template
@@ -137,10 +137,9 @@ def run_architect_agent(
     design_filename = "DESIGN.md"
     design_path = workspace / design_filename
     try:
-        with open(design_path, 'w') as f:
-            f.write(design_content)
+        safe_write_file(workspace, design_filename, design_content)
         result["design_path"] = str(design_path)
-    except IOError as e:
+    except (IOError, PermissionError) as e:
         result["error"] = f"Failed to write DESIGN.md: {e}"
         post_comment(f"**ARCHITECT_AGENT Failed**\n\n{result['error']}")
         return result

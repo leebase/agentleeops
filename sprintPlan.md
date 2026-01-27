@@ -21,15 +21,15 @@ The system works, but lacks safety rails. Phase 2 focuses on "The Ratchet" (prev
 
 ### Sprint 8: The Ratchet Guard (Governance)
 **Priority:** P0
-**Status:** open
+**Status:** done
 
 Implement a file-based locking mechanism to enforce approval gates physically on disk.
 
 **Deliverables:**
-- [ ] **Ratchet Manifest:** Create `lib/ratchet.py` to manage `.agentleeops/ratchet.json` (stores file paths, hashes, and lock status).
-- [ ] **Orchestrator Integration:** When a card enters an "Approved" column (3, 5, 7), lock the relevant artifacts in the manifest.
-- [ ] **Write Guard:** Update `lib/workspace.py` to check the ratchet before writing. Raise `PermissionError` if overwriting a locked file.
-- [ ] **Refinement Workflow:** Allow unlocking via specific "Request Revision" moves on the board.
+- [x] **Ratchet Manifest:** Create `lib/ratchet.py` to manage `.agentleeops/ratchet.json` (stores file paths, hashes, and lock status).
+- [x] **Orchestrator Integration:** When a card enters an "Approved" column (3, 5, 7), lock the relevant artifacts in the manifest.
+- [x] **Write Guard:** Update `lib/workspace.py` to check the ratchet before writing. Raise `PermissionError` if overwriting a locked file.
+- [x] **Refinement Workflow:** Allow unlocking via specific "Request Revision" moves on the board. (Implemented basics, future enhancement for UI).
 
 ### Sprint 9: Spawner Safety (Flood Control)
 **Priority:** P0
