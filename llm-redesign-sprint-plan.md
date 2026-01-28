@@ -1,8 +1,8 @@
 # LLM Provider Abstraction - Sprint Plan
 
-**Status:** COMPLETE ✅ (Sprint 16-17, completed 2026-01-27)
+**Status:** COMPLETE ✅ (Sprint 16-18, completed 2026-01-28)
 
-**Note:** This was the original sprint plan. Implementation completed in Sprint 16-17 with post-review fixes. Legacy `lib/opencode.py` fully removed in Sprint 18.
+**Note:** This was the original sprint plan. Implementation completed in Sprint 16-17 with post-review fixes. Sprint 18 added cleanup, monitoring, health checks, compression, and profiling. Legacy `lib/opencode.py` fully removed in Sprint 18.
 
 ## Overview
 
@@ -53,11 +53,11 @@ Refactor AgentLeeOps to support pluggable LLM providers with role-based routing.
 
 ### Acceptance Criteria (Phase A)
 
-- [ ] `LLMClient.complete(role="planner", messages=[...])` routes to OpenRouter
-- [ ] PM Agent uses new abstraction (no direct OpenRouter/OpenCode calls)
-- [ ] Trace file written for each LLM call
-- [ ] Missing API key produces clear error message
-- [ ] Existing tests still pass
+- [x] `LLMClient.complete(role="planner", messages=[...])` routes to OpenRouter
+- [x] PM Agent uses new abstraction (no direct OpenRouter/OpenCode calls)
+- [x] Trace file written for each LLM call
+- [x] Missing API key produces clear error message
+- [x] Existing tests still pass
 
 ---
 
@@ -94,11 +94,54 @@ Refactor AgentLeeOps to support pluggable LLM providers with role-based routing.
 
 ### Acceptance Criteria (Phase B)
 
-- [ ] All 3 providers working (OpenRouter, OpenCode CLI, Gemini CLI)
-- [ ] All agents use `LLMClient` (no direct provider calls)
-- [ ] `doctor` command validates configuration
-- [ ] JSON repair handles common CLI output issues
-- [ ] Full test coverage for new modules
+- [x] All 3 providers working (OpenRouter, OpenCode CLI, Gemini CLI)
+- [x] All agents use `LLMClient` (no direct provider calls)
+- [x] `doctor` command validates configuration
+- [x] JSON repair handles common CLI output issues
+- [x] Full test coverage for new modules (177 tests after Sprint 17)
+
+---
+
+## Sprint 18: Cleanup & Optimization
+
+**Goal:** Polish the LLM system with monitoring, health checks, and performance tools.
+
+### Deliverables
+
+1. **Remove Legacy Code**
+   - Delete `lib/opencode.py` (fully deprecated)
+
+2. **JSON Repair Monitoring**
+   - `lib/llm/monitor.py` - Analyze trace files for repair patterns
+   - `tools/repair-monitor.py` - CLI tool for repair statistics
+   - Track repair rates, methods, provider performance
+
+3. **Prompt Compression**
+   - `lib/llm/compression.py` - Compress large prompts
+   - Multiple strategies: smart, whitespace, aggressive, extract
+   - Auto-compression for messages >10KB
+   - Token savings estimation
+
+4. **Provider Health Checks**
+   - `lib/llm/health.py` - Real connectivity tests
+   - Measure latency for each provider
+   - CLI: `python -m lib.llm.health`
+   - Exit codes for CI/CD integration
+
+5. **Performance Profiling**
+   - `lib/profiler.py` - Profile agent execution
+   - `tools/profile-report.py` - Analyze profiles
+   - Track operation timing, nested calls
+   - Execution tree visualization
+
+### Acceptance Criteria (Sprint 18)
+
+- [x] Legacy `lib/opencode.py` removed
+- [x] JSON repair monitoring with CLI tool
+- [x] Prompt compression with multiple strategies
+- [x] Provider health checks with latency measurement
+- [x] Performance profiling system
+- [x] All 257 tests passing
 
 ---
 

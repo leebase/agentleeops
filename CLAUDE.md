@@ -140,7 +140,7 @@ Orchestrator uses tags to prevent re-processing:
 - `locking` / `locked`
 - `spawning-started` / `spawned`
 
-## LLM Configuration (Sprint 16-17)
+## LLM Configuration (Sprint 16-18)
 
 AgentLeeOps uses a pluggable LLM provider system defined in `config/llm.yaml`:
 
@@ -185,6 +185,50 @@ design_content = response.text
 **Validate configuration:**
 ```bash
 python -m lib.llm.doctor --config config/llm.yaml
+```
+
+**Advanced features (Sprint 18):**
+```python
+# Prompt compression for large inputs
+response = llm.complete(
+    role="planner",
+    messages=messages,
+    compress=True,  # or "smart", "whitespace", "aggressive", "extract"
+)
+
+# Check provider health
+python -m lib.llm.health --provider openrouter
+
+# Profile agent execution
+from lib.profiler import Profiler
+profiler = Profiler()
+with profiler.measure("operation", metadata="value"):
+    # Code to profile
+    pass
+profiler.save("profile.json")
+```
+
+## Monitoring & Observability (Sprint 18)
+
+**Provider Health Checks:**
+```bash
+python -m lib.llm.health                    # Check all providers
+python -m lib.llm.health --provider NAME    # Check specific provider
+python -m lib.llm.health --json             # JSON output
+```
+
+**JSON Repair Monitoring:**
+```bash
+python tools/repair-monitor.py              # Repair patterns
+python tools/repair-monitor.py --providers  # Provider metrics
+python tools/repair-monitor.py --all        # Full report
+```
+
+**Performance Profiling:**
+```bash
+python tools/profile-report.py --latest     # Latest profile
+python tools/profile-report.py --all        # Aggregate all profiles
+python tools/profile-report.py --json       # JSON output
 ```
 
 ## Environment Variables
