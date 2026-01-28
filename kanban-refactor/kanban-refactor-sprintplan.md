@@ -32,7 +32,7 @@
     - `KanboardWorkItemProvider` methods: `update_state`, `post_comment`, `set_metadata`, `add_tag`.
   - **Verification:** Integration test that moves a card, comments on it, and updates metadata; verifies changes via read back.
 
-- [ ] **Sprint 1.4: Client Facade & Capability Detection**
+- [x] **Sprint 1.4: Client Facade & Capability Detection**
   - **Goal:** Create the user-facing client used by agents.
   - **Deliverables:**
     - `lib/workitem/client.py`: `WorkItemClient` factory.

@@ -13,6 +13,8 @@ from lib.workitem.types import (
 )
 from lib.workitem.protocol import WorkItemProvider
 from lib.workitem.config import load_provider_config, get_provider_config
+from lib.workitem.capabilities import Capability, detect_capabilities, has_capability
+from lib.workitem.client import WorkItemClient
 
 __all__ = [
     "WorkItem",
@@ -22,4 +24,8 @@ __all__ = [
     "WorkItemProvider",
     "load_provider_config",
     "get_provider_config",
+    "Capability",
+    "detect_capabilities",
+    "has_capability",
+    "WorkItemClient",
 ]
