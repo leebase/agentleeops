@@ -123,12 +123,12 @@ Pluggable LLM provider system with role-based routing.
 
 ### Sprint 18: Cleanup & Optimization
 **Priority:** P2
-**Status:** planned
+**Status:** in-progress
 
 Post-Sprint 17 cleanup and performance improvements.
 
 **Deliverables:**
-- [ ] Remove legacy `lib/opencode.py` module (deprecated)
+- [x] Remove legacy `lib/opencode.py` module (deprecated) - Removed in Sprint 18, all agents using `lib/llm/`
 - [ ] Add monitoring dashboard for JSON repair patterns
 - [ ] Consider prompt compression for very large inputs
 - [ ] Add provider health checks endpoint

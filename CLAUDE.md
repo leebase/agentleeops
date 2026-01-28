@@ -83,10 +83,9 @@ Kanboard (Port 88) → Webhook Server → Orchestrator → Agents → ~/projects
 - `lib/llm/`: LLM provider abstraction (Sprint 16-17)
   - `client.py`: Role-based LLM client
   - `config.py`: Configuration loading from `config/llm.yaml`
-  - `providers/`: Provider implementations (OpenRouter HTTP, OpenCode CLI)
+  - `providers/`: Provider implementations (OpenRouter HTTP, OpenCode CLI, Gemini CLI)
   - `json_repair.py`: JSON repair for CLI output
   - `doctor.py`: Configuration validation command
-- `lib/opencode.py`: Legacy LLM wrapper (deprecated, use `lib/llm/` instead)
 - `lib/ratchet.py`: File locking/integrity via `.agentleeops/ratchet.json`
 - `lib/logger.py`: Structured JSON logging
 - `lib/trace.py`: Trace store for observability

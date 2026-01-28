@@ -62,7 +62,10 @@ The system can be run in different modes depending on your needs:
 *   **`orchestrator.py`**: The main logic that drives the workflow state machine.
 *   **`webhook_server.py`**: Entry point for HTTP-based triggers.
 *   **`agents/`**: Contains specific agent implementations (e.g., `architect.py` for design).
-*   **`lib/`**: Shared utilities for workspace management (`workspace.py`), task parsing (`task_fields.py`), and LLM calls (`opencode.py`).
+*   **`lib/`**: Shared utilities including:
+    *   `workspace.py`: Workspace management
+    *   `task_fields.py`: Task parsing
+    *   `llm/`: LLM provider abstraction (role-based routing, multiple provider support)
 
 ### Workflow Rules
 1.  **Input Contract:** Work items (Kanboard cards) must specify a `dirname` (project folder name) and `context_mode` (`NEW` or `FEATURE`) via custom fields or YAML description.

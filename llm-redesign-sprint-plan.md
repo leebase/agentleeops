@@ -1,5 +1,9 @@
 # LLM Provider Abstraction - Sprint Plan
 
+**Status:** COMPLETE ✅ (Sprint 16-17, completed 2026-01-27)
+
+**Note:** This was the original sprint plan. Implementation completed in Sprint 16-17 with post-review fixes. Legacy `lib/opencode.py` fully removed in Sprint 18.
+
 ## Overview
 
 Refactor AgentLeeOps to support pluggable LLM providers with role-based routing. Based on PR spec in `codereview/plugin-pr.md`.

@@ -4,6 +4,8 @@
 
 Implementation completed on: 2026-01-27
 
+**Note:** This document describes Sprint 16 Phase A. The legacy `lib/opencode.py` module mentioned below was fully deprecated and removed in Sprint 18 (2026-01-27).
+
 ## What Was Implemented
 
 ### Core Architecture
