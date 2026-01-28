@@ -123,7 +123,7 @@ Pluggable LLM provider system with role-based routing.
 
 ### Sprint 18: Cleanup & Optimization
 **Priority:** P2
-**Status:** in-progress
+**Status:** complete ✅
 
 Post-Sprint 17 cleanup and performance improvements.
 
@@ -151,4 +151,15 @@ Post-Sprint 17 cleanup and performance improvements.
   - CLI: `python -m lib.llm.health [--provider NAME] [--json]`
   - Exit codes for CI/CD integration (0=healthy, 1=unhealthy)
   - 16 comprehensive tests added (229/229 passing)
-- [ ] Performance profiling of agent loops
+- [x] Performance profiling of agent loops - Completed with `lib/profiler.py` and `tools/profile-report.py`
+  - Profiler class with context managers and decorators
+  - Measures execution time for agent operations
+  - Tracks nested operations (LLM calls, file I/O, git operations)
+  - ProfileEntry dataclass with parent-child hierarchy
+  - Statistics generation (count, total, avg, min, max duration)
+  - Profile serialization to JSON
+  - CLI tool: `python tools/profile-report.py [--latest|--all] [--json]`
+  - Execution tree visualization with hierarchical timing
+  - Aggregation across multiple runs
+  - Profiles stored in `.agentleeops/profiles/`
+  - 28 comprehensive tests added (257/257 passing)

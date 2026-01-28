@@ -117,7 +117,7 @@ pytest tests/
 pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 ```
 
-The test suite (229 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, prompt compression, provider health checks, task field parsing, workspace management, and Sprint 17 production readiness fixes.
+The test suite (257 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, prompt compression, provider health checks, performance profiling, task field parsing, workspace management, and Sprint 17 production readiness fixes.
 
 ## Monitoring & Observability
 
@@ -148,6 +148,8 @@ The health check system:
 
 ### Performance Monitoring
 
+#### JSON Repair and Provider Performance
+
 ```bash
 # View JSON repair patterns and statistics
 python tools/repair-monitor.py
@@ -172,9 +174,56 @@ The monitoring dashboard provides:
 - Actionable recommendations for improving JSON mode prompts
 - Cost tracking and token usage statistics
 
+#### Agent Execution Profiling
+
+```bash
+# Analyze latest profile
+python tools/profile-report.py --latest
+
+# Analyze specific profile
+python tools/profile-report.py path/to/profile.json
+
+# Aggregate all profiles in workspace
+python tools/profile-report.py --workspace ~/projects/myapp --all
+
+# Export as JSON
+python tools/profile-report.py --latest --json
+
+# Hide execution tree
+python tools/profile-report.py --latest --no-tree
+```
+
+The profiling system:
+- Measures execution time for agent operations
+- Tracks nested operations (LLM calls, file I/O, git operations)
+- Generates statistics (count, total, avg, min, max duration)
+- Shows slowest operations
+- Displays execution tree with hierarchical timing
+- Supports aggregation across multiple runs
+- Profiles stored in `.agentleeops/profiles/`
+
+**Using profiler in code:**
+```python
+from lib.profiler import Profiler, profile
+
+# Context manager
+profiler = Profiler()
+with profiler.measure("operation_name", metadata="value"):
+    # Code to profile
+    pass
+
+# Decorator
+@profile("my_function")
+def my_function():
+    pass
+
+# Save profile
+profiler.save("profile.json")
+```
+
 ## Status
 
-AgentLeeOps is production-ready through Sprint 17 (LLM Provider Abstraction + Post-Review Fixes complete). See `sprintPlan.md` for detailed progress tracking.
+AgentLeeOps is production-ready through Sprint 18 (LLM Provider Abstraction + Cleanup & Optimization complete). See `sprintPlan.md` for detailed progress tracking.
 
 **Current capabilities:**
 - Full 10-column Kanboard workflow
