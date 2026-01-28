@@ -117,7 +117,7 @@ pytest tests/
 pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 ```
 
-The test suite (186 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, task field parsing, workspace management, and Sprint 17 production readiness fixes.
+The test suite (213 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, prompt compression, task field parsing, workspace management, and Sprint 17 production readiness fixes.
 
 ## Monitoring & Observability
 
@@ -161,6 +161,10 @@ AgentLeeOps is production-ready through Sprint 17 (LLM Provider Abstraction + Po
   - Configuration validation via `python -m lib.llm.doctor`
   - Lazy provider validation (system starts with partial configs)
   - Large prompt handling (stdin fallback for prompts >100KB)
+  - Prompt compression for very large inputs (Sprint 18)
+    - Smart compression strategies (whitespace, aggressive, extract)
+    - Automatic compression for messages >10KB
+    - Token savings estimation and logging
 - Ratchet governance with SHA256 hash verification
 - LLM syntax guards to prevent refusal injection
 - JSON repair for CLI output (trailing commas, unquoted keys, etc.)

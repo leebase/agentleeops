@@ -58,6 +58,7 @@ class LLMClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
         timeout_s: int | None = None,
+        compress: bool | str = False,
     ) -> LLMResponse:
         """Execute completion request via configured provider.
 
@@ -69,6 +70,7 @@ class LLMClient:
             max_tokens: Override max tokens
             temperature: Override temperature
             timeout_s: Override timeout
+            compress: Enable prompt compression (bool or strategy name: "smart", "whitespace", "aggressive")
 
         Returns:
             LLM response
@@ -91,6 +93,30 @@ class LLMClient:
                     f"Provider '{role_cfg.provider}' is not properly configured: {e}. "
                     f"Run 'python -m lib.llm.doctor --config {self.config_path}' to diagnose."
                 ) from e
+
+        # Apply prompt compression if requested
+        compression_results = []
+        if compress:
+            from .compression import auto_compress_messages
+
+            strategy = compress if isinstance(compress, str) else "smart"
+            messages, compression_results = auto_compress_messages(
+                messages, threshold=10000, strategy=strategy
+            )
+
+            # Log compression if applied
+            if compression_results:
+                total_saved = sum(r.tokens_saved for r in compression_results)
+                logger.info(
+                    "llm.compression.applied",
+                    extra={
+                        "event": "llm.compression.applied",
+                        "role": role,
+                        "messages_compressed": len(compression_results),
+                        "tokens_saved": total_saved,
+                        "strategy": strategy,
+                    },
+                )
 
         # Build request with merged parameters
         request = LLMRequest(
