@@ -93,7 +93,7 @@ Pluggable LLM provider system with role-based routing.
 
 ### Sprint 17: CLI Providers + Full Rollout (Phase B)
 **Priority:** P1
-**Status:** complete
+**Status:** complete ✅
 
 **Deliverables:**
 - [x] OpenCode CLI provider (`lib/llm/providers/opencode_cli.py`)
@@ -109,5 +109,27 @@ Pluggable LLM provider system with role-based routing.
 - [x] 17 new CLI provider tests (all passing)
 - [x] Total test count: 135+ tests passing
 
+**Post-Review Fixes (completed 2026-01-27):**
+- [x] **Lazy Provider Validation** - Config loads even with missing API keys; validation happens on first use
+- [x] **Dynamic Log Field Extraction** - All LLM context fields (event, role, provider, model, etc.) now appear in logs
+- [x] **JSON Repair Metadata** - Full audit trail: `json_repair_applied` and `json_repair_method` in responses, logs, and traces
+- [x] **Large Prompt Handling** - CLI providers use stdin for prompts >100KB to avoid argv limits
+- [x] **Raw Output in Traces** - Trace files include original provider output before repair
+- [x] 11 new comprehensive tests (177/177 passing)
+- [x] Documentation: `codereview/fixes-sprint17.md`
+
 **Deferred:**
 - [ ] Gemini CLI provider (future, optional)
+
+### Sprint 18: Cleanup & Optimization
+**Priority:** P2
+**Status:** planned
+
+Post-Sprint 17 cleanup and performance improvements.
+
+**Deliverables:**
+- [ ] Remove legacy `lib/opencode.py` module (deprecated)
+- [ ] Add monitoring dashboard for JSON repair patterns
+- [ ] Consider prompt compression for very large inputs
+- [ ] Add provider health checks endpoint
+- [ ] Performance profiling of agent loops
