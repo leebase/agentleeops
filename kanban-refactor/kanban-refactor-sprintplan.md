@@ -26,7 +26,7 @@
   - **Verification:** Integration test that connects to local Kanboard and fetches a known card as a `WorkItem`.
   - **Dependencies:** Running Kanboard instance.
 
-- [ ] **Sprint 1.3: Kanboard Provider (Write Operations)**
+- [x] **Sprint 1.3: Kanboard Provider (Write Operations)**
   - **Goal:** Implement state changes and updates.
   - **Deliverables:**
     - `KanboardWorkItemProvider` methods: `update_state`, `post_comment`, `set_metadata`, `add_tag`.

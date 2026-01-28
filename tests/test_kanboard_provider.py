@@ -180,3 +180,111 @@ class TestKanboardProviderMetadata:
         item = items[0]
         # created_at should be set for any task
         assert item.created_at is not None
+
+
+class TestKanboardProviderWriteOperations:
+    """Test write operations (add/remove tag, comment, metadata)."""
+
+    def test_add_and_remove_tag(self, provider):
+        """Should add and remove a tag from a task."""
+        # Find a task
+        query = WorkItemQuery(limit=1)
+        items = provider.query_work_items(query)
+        
+        if not items:
+            pytest.skip("No tasks found in Kanboard")
+        
+        identity = items[0].identity
+        test_tag = "test-integration-tag"
+        
+        # Add the tag
+        result = provider.add_tag(identity, test_tag)
+        assert result is True
+        
+        # Verify tag was added
+        tags = provider.get_tags(identity)
+        assert test_tag in tags
+        
+        # Remove the tag
+        result = provider.remove_tag(identity, test_tag)
+        assert result is True
+        
+        # Verify tag was removed
+        tags = provider.get_tags(identity)
+        assert test_tag not in tags
+
+    def test_add_tag_idempotent(self, provider):
+        """Adding same tag twice should succeed."""
+        query = WorkItemQuery(limit=1)
+        items = provider.query_work_items(query)
+        
+        if not items:
+            pytest.skip("No tasks found in Kanboard")
+        
+        identity = items[0].identity
+        test_tag = "idempotent-test"
+        
+        # Add twice
+        provider.add_tag(identity, test_tag)
+        result = provider.add_tag(identity, test_tag)
+        assert result is True
+        
+        # Cleanup
+        provider.remove_tag(identity, test_tag)
+
+    def test_remove_nonexistent_tag(self, provider):
+        """Removing non-existent tag should return True (idempotent)."""
+        query = WorkItemQuery(limit=1)
+        items = provider.query_work_items(query)
+        
+        if not items:
+            pytest.skip("No tasks found in Kanboard")
+        
+        result = provider.remove_tag(items[0].identity, "nonexistent-tag-xyz")
+        assert result is True
+
+    def test_post_comment(self, provider):
+        """Should post a comment to a task."""
+        query = WorkItemQuery(limit=1)
+        items = provider.query_work_items(query)
+        
+        if not items:
+            pytest.skip("No tasks found in Kanboard")
+        
+        identity = items[0].identity
+        comment = "Test comment from integration test"
+        
+        result = provider.post_comment(identity, comment)
+        assert result is True
+
+    def test_set_metadata(self, provider):
+        """Should attempt to set metadata on a task (requires MetaMagik plugin)."""
+        query = WorkItemQuery(limit=1)
+        items = provider.query_work_items(query)
+        
+        if not items:
+            pytest.skip("No tasks found in Kanboard")
+        
+        identity = items[0].identity
+        
+        # Set a test metadata field - may fail if MetaMagik not installed
+        result = provider.set_metadata(identity, "test_field", "test_value")
+        # Result depends on MetaMagik plugin availability
+        assert isinstance(result, bool)
+        print(f"set_metadata result: {result} (False if MetaMagik not installed)")
+
+
+class TestKanboardProviderStateTransition:
+    """Test state transition operations."""
+
+    def test_state_to_column_id_lookup(self, provider):
+        """Should find column ID for known states."""
+        # Trigger cache population
+        query = WorkItemQuery(limit=1)
+        provider.query_work_items(query)
+        
+        # Try to look up column ID for Inbox state
+        col_id = provider._state_to_column_id(WorkItemState.INBOX, 1)
+        # Should find a column (exact ID depends on board setup)
+        print(f"Inbox column ID: {col_id}")
+

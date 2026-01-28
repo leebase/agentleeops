@@ -193,7 +193,238 @@ class KanboardWorkItemProvider:
         except Exception:
             return []
     
+    # --- Write Operations ---
+    
+    def update_state(
+        self,
+        identity: WorkItemIdentity,
+        new_state: WorkItemState,
+    ) -> bool:
+        """
+        Transition work item to a new state.
+        
+        Moves the Kanboard task to the column corresponding to the new state.
+        
+        Args:
+            identity: Work item identifier
+            new_state: Target logical state
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            task_id = int(identity.external_id)
+            task = self.client.get_task(task_id=task_id)
+            
+            if not task:
+                return False
+            
+            project_id = int(task.get("project_id", self._default_project_id))
+            
+            # Find column for target state
+            column_id = self._state_to_column_id(new_state, project_id)
+            if column_id is None:
+                return False
+            
+            # Move task to new column
+            # Kanboard API: move_task_position(project_id, task_id, column_id, position, swimlane_id)
+            swimlane_id = int(task.get("swimlane_id", 0))
+            result = self.client.move_task_position(
+                project_id=project_id,
+                task_id=task_id,
+                column_id=column_id,
+                position=1,  # Top of column
+                swimlane_id=swimlane_id,
+            )
+            
+            # Clear column cache since state changed
+            if project_id in self._column_cache:
+                del self._column_cache[project_id]
+            
+            return bool(result)
+        
+        except Exception:
+            return False
+    
+    def post_comment(
+        self,
+        identity: WorkItemIdentity,
+        content: str,
+    ) -> bool:
+        """
+        Add a comment to the work item.
+        
+        Args:
+            identity: Work item identifier
+            content: Comment text (markdown supported)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            task_id = int(identity.external_id)
+            # Kanboard API: create_comment(task_id, user_id, content)
+            # user_id=0 uses the API user
+            result = self.client.create_comment(
+                task_id=task_id,
+                user_id=0,
+                content=content,
+            )
+            return bool(result)
+        
+        except Exception:
+            return False
+    
+    def set_metadata(
+        self,
+        identity: WorkItemIdentity,
+        key: str,
+        value: str,
+    ) -> bool:
+        """
+        Set a metadata field on the work item.
+        
+        Uses Kanboard's MetaMagik custom fields API.
+        
+        Args:
+            identity: Work item identifier
+            key: Metadata field name
+            value: Field value
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            task_id = int(identity.external_id)
+            result = self.client.save_task_metadata(
+                task_id=task_id,
+                name=key,
+                value=str(value),
+            )
+            return bool(result)
+        
+        except Exception:
+            return False
+    
+    def add_tag(
+        self,
+        identity: WorkItemIdentity,
+        tag: str,
+    ) -> bool:
+        """
+        Add a tag to the work item.
+        
+        Args:
+            identity: Work item identifier
+            tag: Tag name to add
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            task_id = int(identity.external_id)
+            task = self.client.get_task(task_id=task_id)
+            
+            if not task:
+                return False
+            
+            project_id = int(task.get("project_id", self._default_project_id))
+            
+            # Get existing tags
+            existing = self.get_tags(identity)
+            
+            # Already has tag
+            if tag in existing:
+                return True
+            
+            # Add new tag
+            updated = existing + [tag]
+            result = self.client.set_task_tags(
+                project_id=project_id,
+                task_id=task_id,
+                tags=updated,
+            )
+            return bool(result)
+        
+        except Exception:
+            return False
+    
+    def remove_tag(
+        self,
+        identity: WorkItemIdentity,
+        tag: str,
+    ) -> bool:
+        """
+        Remove a tag from the work item.
+        
+        Args:
+            identity: Work item identifier
+            tag: Tag name to remove
+            
+        Returns:
+            True if successful (or tag didn't exist), False on error
+        """
+        try:
+            task_id = int(identity.external_id)
+            task = self.client.get_task(task_id=task_id)
+            
+            if not task:
+                return False
+            
+            project_id = int(task.get("project_id", self._default_project_id))
+            
+            # Get existing tags
+            existing = self.get_tags(identity)
+            
+            # Tag not present - success (idempotent)
+            if tag not in existing:
+                return True
+            
+            # Remove tag
+            updated = [t for t in existing if t != tag]
+            result = self.client.set_task_tags(
+                project_id=project_id,
+                task_id=task_id,
+                tags=updated,
+            )
+            return bool(result)
+        
+        except Exception:
+            return False
+    
     # --- Helpers ---
+    
+    def _state_to_column_id(self, state: WorkItemState, project_id: int) -> int | None:
+        """
+        Reverse lookup: find column ID for a given state.
+        
+        Args:
+            state: Target WorkItemState
+            project_id: Project to look up columns in
+            
+        Returns:
+            Column ID if found, None otherwise
+        """
+        # Ensure column cache is populated
+        if project_id not in self._column_cache:
+            self._get_column_name(0, project_id)  # Triggers cache population
+        
+        # Reverse lookup: state -> column name -> column id
+        target_column_name = None
+        for col_name, col_state in self._column_map.items():
+            if col_state == state:
+                target_column_name = col_name
+                break
+        
+        if not target_column_name:
+            return None
+        
+        # Find column ID
+        for col_id, col_name in self._column_cache.get(project_id, {}).items():
+            if col_name == target_column_name:
+                return col_id
+        
+        return None
     
     def _get_column_name(self, column_id: int, project_id: int) -> str:
         """Get column name from ID, using cache."""
