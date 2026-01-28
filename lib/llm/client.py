@@ -17,15 +17,18 @@ logger = get_logger(__name__)
 class LLMClient:
     """Main LLM client for executing completions via configured providers."""
 
-    def __init__(self, config: LLMConfig, workspace: Path | None = None):
+    def __init__(self, config: LLMConfig, workspace: Path | None = None, config_path: str | None = None):
         """Initialize client with configuration.
 
         Args:
             config: LLM configuration
             workspace: Optional workspace path for trace recording
+            config_path: Optional path to config file (for error messages)
         """
         self.config = config
         self.workspace = workspace
+        self.config_path = config_path or "config/llm.yaml"
+        self._validated_providers = set()  # Cache for lazy validation
 
     @classmethod
     def from_config(cls, config_path: str | Path, workspace: Path | None = None) -> "LLMClient":
@@ -43,7 +46,7 @@ class LLMClient:
             ValueError: If configuration is invalid
         """
         config = load_config(config_path)
-        return cls(config, workspace)
+        return cls(config, workspace, str(config_path))
 
     def complete(
         self,
@@ -76,6 +79,18 @@ class LLMClient:
         """
         # Resolve role configuration
         role_cfg, provider_cfg = resolve_role(role, self.config)
+
+        # Lazy validation: Only validate provider on first use
+        if role_cfg.provider not in self._validated_providers:
+            try:
+                provider = get_provider(role_cfg.provider)
+                provider.validate_config(provider_cfg.config)
+                self._validated_providers.add(role_cfg.provider)
+            except ValueError as e:
+                raise ValueError(
+                    f"Provider '{role_cfg.provider}' is not properly configured: {e}. "
+                    f"Run 'python -m lib.llm.doctor --config {self.config_path}' to diagnose."
+                ) from e
 
         # Build request with merged parameters
         request = LLMRequest(
@@ -134,6 +149,8 @@ class LLMClient:
                     "elapsed_ms": response.elapsed_ms,
                     "usage": response.usage,
                     "trace_file": str(trace_file),
+                    "json_repair_applied": response.json_repair_applied,
+                    "json_repair_method": response.json_repair_method,
                 },
             )
 

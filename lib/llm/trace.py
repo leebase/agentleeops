@@ -59,6 +59,9 @@ def record_trace(
             "text": response.text,
             "usage": response.usage,
             "elapsed_ms": response.elapsed_ms,
+            "json_repair_applied": response.json_repair_applied,
+            "json_repair_method": response.json_repair_method,
+            "raw": response.raw,
         },
         "success": True,
         "metadata": {

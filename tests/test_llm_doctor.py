@@ -20,6 +20,7 @@ class TestCheckProvider:
     def test_valid_openrouter_provider(self):
         """Valid OpenRouter provider passes."""
         provider_cfg = ProviderConfig(
+            provider_id="openrouter",
             type="openrouter_http",
             config={
                 "base_url": "https://openrouter.ai/api/v1",
@@ -38,6 +39,7 @@ class TestCheckProvider:
     def test_missing_api_key(self):
         """Provider unavailable when API key missing."""
         provider_cfg = ProviderConfig(
+            provider_id="openrouter",
             type="openrouter_http",
             config={
                 "base_url": "https://openrouter.ai/api/v1",
@@ -54,6 +56,7 @@ class TestCheckProvider:
     def test_valid_opencode_cli_provider(self):
         """Valid OpenCode CLI provider passes when CLI installed."""
         provider_cfg = ProviderConfig(
+            provider_id="opencode_cli",  # Use the registry ID
             type="opencode_cli",
             config={
                 "command": "opencode",
@@ -61,10 +64,10 @@ class TestCheckProvider:
             }
         )
 
-        # Mock successful CLI check
-        with patch("subprocess.run") as mock_run:
+        # Mock successful CLI check - patch in the right module
+        with patch("lib.llm.providers.opencode_cli.subprocess.run") as mock_run:
             mock_run.return_value = Mock(returncode=0)
-            result = check_provider("opencode", provider_cfg)
+            result = check_provider("opencode_cli", provider_cfg)
 
         assert result["available"] is True
         assert result["error"] is None
@@ -72,6 +75,7 @@ class TestCheckProvider:
     def test_opencode_cli_not_found(self):
         """Provider unavailable when CLI not found."""
         provider_cfg = ProviderConfig(
+            provider_id="opencode",
             type="opencode_cli",
             config={
                 "command": "nonexistent-cli",
@@ -89,6 +93,7 @@ class TestCheckProvider:
     def test_unknown_provider_type(self):
         """Provider unavailable for unknown type."""
         provider_cfg = ProviderConfig(
+            provider_id="custom",
             type="unknown_type",
             config={}
         )
@@ -96,7 +101,8 @@ class TestCheckProvider:
         result = check_provider("custom", provider_cfg)
 
         assert result["available"] is False
-        assert "Unknown provider type" in result["error"]
+        # Error message now comes from get_provider() which lists available providers
+        assert "not found" in result["error"] or "Available providers" in result["error"]
 
 
 class TestCheckRole:
@@ -108,12 +114,14 @@ class TestCheckRole:
             default_role="planner",
             providers={
                 "openrouter": ProviderConfig(
+                    provider_id="openrouter",
                     type="openrouter_http",
                     config={"base_url": "https://openrouter.ai/api/v1", "api_key_env": "KEY"}
                 )
             },
             roles={
                 "planner": RoleConfig(
+                    role="planner",
                     provider="openrouter",
                     model="gpt-4o",
                     temperature=0.2,
@@ -137,6 +145,7 @@ class TestCheckRole:
             providers={},
             roles={
                 "planner": RoleConfig(
+                    role="planner",
                     provider="missing",
                     model="gpt-4o",
                 )
@@ -154,10 +163,11 @@ class TestCheckRole:
         config = LLMConfig(
             default_role="planner",
             providers={
-                "opencode": ProviderConfig(type="opencode_cli", config={})
+                "opencode": ProviderConfig(provider_id="opencode", type="opencode_cli", config={})
             },
             roles={
                 "planner": RoleConfig(
+                    role="planner",
                     provider="opencode",
                     model="gpt-4o",
                 )
@@ -177,10 +187,11 @@ class TestCheckRole:
         config = LLMConfig(
             default_role="planner",
             providers={
-                "openrouter": ProviderConfig(type="openrouter_http", config={"api_key_env": "KEY", "base_url": "url"})
+                "openrouter": ProviderConfig(provider_id="openrouter", type="openrouter_http", config={"api_key_env": "KEY", "base_url": "url"})
             },
             roles={
                 "planner": RoleConfig(
+                    role="planner",
                     provider="openrouter",
                     model=None,  # Missing
                 )
@@ -200,10 +211,11 @@ class TestCheckRole:
         config = LLMConfig(
             default_role="planner",
             providers={
-                "openrouter": ProviderConfig(type="openrouter_http", config={"api_key_env": "KEY", "base_url": "url"})
+                "openrouter": ProviderConfig(provider_id="openrouter", type="openrouter_http", config={"api_key_env": "KEY", "base_url": "url"})
             },
             roles={
                 "planner": RoleConfig(
+                    role="planner",
                     provider="openrouter",
                     model="gpt-4o",
                     temperature=1.5,  # Out of range
@@ -224,10 +236,11 @@ class TestCheckRole:
         config = LLMConfig(
             default_role="planner",
             providers={
-                "openrouter": ProviderConfig(type="openrouter_http", config={"api_key_env": "KEY", "base_url": "url"})
+                "openrouter": ProviderConfig(provider_id="openrouter", type="openrouter_http", config={"api_key_env": "KEY", "base_url": "url"})
             },
             roles={
                 "planner": RoleConfig(
+                    role="planner",
                     provider="openrouter",
                     model="gpt-4o",
                     max_tokens=0,  # Invalid

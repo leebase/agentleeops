@@ -118,13 +118,9 @@ def load_config(path: str | Path) -> LLMConfig:
         roles=roles,
     )
 
-    # Validate provider configurations
-    for provider_id, provider_cfg in config.providers.items():
-        try:
-            provider = get_provider(provider_id)
-            provider.validate_config(provider_cfg.config)
-        except ValueError as e:
-            raise ValueError(f"Provider '{provider_id}' validation failed: {e}") from e
+    # Provider validation is now lazy (happens on first use in LLMClient.complete())
+    # This allows the system to start with partially configured providers
+    # Use 'python -m lib.llm.doctor' for upfront validation
 
     return config
 

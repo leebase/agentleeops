@@ -15,22 +15,36 @@ handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 
 class JsonFormatter(logging.Formatter):
+    """JSON formatter that dynamically extracts all extra fields."""
+
+    # Standard LogRecord attributes to exclude (these are Python logging internals)
+    STANDARD_ATTRS = {
+        'name', 'msg', 'args', 'created', 'filename', 'funcName', 'levelname',
+        'levelno', 'lineno', 'module', 'msecs', 'message', 'pathname', 'process',
+        'processName', 'relativeCreated', 'thread', 'threadName', 'exc_info',
+        'exc_text', 'stack_info', 'asctime'
+    }
+
     def format(self, record):
+        # Base fields
         log_record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "message": record.getMessage(),
             "module": record.module,
         }
-        
-        # Add extra fields if present
-        if hasattr(record, "agent"):
-            log_record["agent"] = record.agent
-        if hasattr(record, "task_id"):
-            log_record["task_id"] = record.task_id
-        if hasattr(record, "project_id"):
-            log_record["project_id"] = record.project_id
-            
+
+        # Dynamically extract all extra fields (exclude standard LogRecord attrs)
+        for key, value in record.__dict__.items():
+            if key not in self.STANDARD_ATTRS and not key.startswith('_'):
+                # Serialize complex objects (like usage dicts) properly
+                try:
+                    json.dumps(value)  # Test if JSON-serializable
+                    log_record[key] = value
+                except (TypeError, ValueError):
+                    # Non-serializable (e.g., Exception objects) - convert to string
+                    log_record[key] = str(value)
+
         return json.dumps(log_record)
 
 handler.setFormatter(JsonFormatter())

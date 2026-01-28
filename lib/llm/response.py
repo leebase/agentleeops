@@ -29,6 +29,9 @@ class LLMResponse:
     request_id: str = ""
     elapsed_ms: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
+    # JSON repair metadata
+    json_repair_applied: bool = False
+    json_repair_method: str | None = None
 
     def __post_init__(self):
         """Ensure request_id is set."""

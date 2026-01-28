@@ -91,8 +91,17 @@ class GeminiCLIProvider:
         # Always use JSON output format for structured parsing
         cmd.extend(["--output-format", "json"])
 
-        # Add prompt as last argument
-        cmd.append(prompt)
+        # For large prompts, use stdin instead of argv
+        ARGV_LIMIT = 100_000  # Conservative limit (~100KB)
+        use_stdin = len(prompt) > ARGV_LIMIT
+
+        if not use_stdin:
+            # Small prompt: pass as argument (current behavior)
+            cmd.append(prompt)
+            stdin_input = None
+        else:
+            # Large prompt: pass via stdin
+            stdin_input = prompt.encode('utf-8')
 
         # Execute with timing
         request_id = str(uuid.uuid4())
@@ -101,6 +110,7 @@ class GeminiCLIProvider:
         try:
             result = subprocess.run(
                 cmd,
+                input=stdin_input,
                 capture_output=True,
                 text=True,
                 timeout=timeout_s,
@@ -132,8 +142,10 @@ class GeminiCLIProvider:
         response_text = self._parse_gemini_output(result.stdout)
 
         # If JSON mode requested, attempt to repair malformed JSON
+        json_repair_applied = False
+        json_repair_method = None
         if request.json_mode:
-            response_text = self._handle_json_mode(response_text)
+            response_text, json_repair_applied, json_repair_method = self._handle_json_mode(response_text)
 
         # Extract usage info from JSON output if available
         usage = self._extract_usage(result.stdout)
@@ -147,7 +159,9 @@ class GeminiCLIProvider:
             raw={"stdout": result.stdout, "stderr": result.stderr},
             request_id=request_id,
             elapsed_ms=elapsed_ms,
-            metadata={"command": " ".join(cmd)}
+            metadata={"command": " ".join(cmd)},
+            json_repair_applied=json_repair_applied,
+            json_repair_method=json_repair_method,
         )
 
     def _build_prompt(self, messages: list[dict[str, str]]) -> str:
@@ -260,14 +274,14 @@ class GeminiCLIProvider:
 
         return None
 
-    def _handle_json_mode(self, text: str) -> str:
+    def _handle_json_mode(self, text: str) -> tuple[str, bool, str]:
         """Handle JSON mode output with repair if needed.
 
         Args:
             text: Raw CLI output
 
         Returns:
-            Repaired JSON string if possible
+            Tuple of (repaired_json, was_repaired, repair_method)
 
         Raises:
             RuntimeError: If JSON is unrepairable
@@ -281,5 +295,5 @@ class GeminiCLIProvider:
                 f"JSON mode enabled but output is not valid JSON: {error}"
             )
 
-        # Return repaired JSON
-        return repaired
+        # Return all metadata for auditing
+        return repaired, was_repaired, method

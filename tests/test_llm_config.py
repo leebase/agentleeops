@@ -46,9 +46,12 @@ def test_load_valid_config():
     config_path = create_test_config(config_data)
 
     try:
-        # This will fail provider validation, but should parse structure correctly
-        with pytest.raises(ValueError, match="Provider 'test_provider' validation failed"):
-            load_config(config_path)
+        # With lazy validation, config should load successfully
+        # Provider validation happens on first use in LLMClient.complete()
+        config = load_config(config_path)
+        assert config.default_role == "planner"
+        assert "test_provider" in config.providers
+        assert "planner" in config.roles
     finally:
         config_path.unlink()
 
