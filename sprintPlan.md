@@ -129,7 +129,12 @@ Post-Sprint 17 cleanup and performance improvements.
 
 **Deliverables:**
 - [x] Remove legacy `lib/opencode.py` module (deprecated) - Removed in Sprint 18, all agents using `lib/llm/`
-- [ ] Add monitoring dashboard for JSON repair patterns
+- [x] Add monitoring dashboard for JSON repair patterns - Completed with `tools/repair-monitor.py` CLI tool
+  - Analyzes trace files for repair statistics
+  - Tracks patterns by provider, role, and model
+  - Shows provider performance metrics (latency, success rate, cost)
+  - Provides actionable recommendations
+  - 9 comprehensive tests added (186/186 passing)
 - [ ] Consider prompt compression for very large inputs
 - [ ] Add provider health checks endpoint
 - [ ] Performance profiling of agent loops

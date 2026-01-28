@@ -117,7 +117,35 @@ pytest tests/
 pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 ```
 
-The test suite (177 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair, task field parsing, workspace management, and Sprint 17 production readiness fixes.
+The test suite (186 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, task field parsing, workspace management, and Sprint 17 production readiness fixes.
+
+## Monitoring & Observability
+
+AgentLeeOps includes comprehensive monitoring tools for LLM operations:
+
+```bash
+# View JSON repair patterns and statistics
+python tools/repair-monitor.py
+
+# View provider performance metrics
+python tools/repair-monitor.py --providers
+
+# View all reports (repair + performance)
+python tools/repair-monitor.py --all
+
+# Analyze specific workspace
+python tools/repair-monitor.py --workspace ~/projects/myapp
+
+# Export statistics as JSON
+python tools/repair-monitor.py --json
+```
+
+The monitoring dashboard provides:
+- JSON repair rate and method distribution
+- Repair patterns by provider, role, and model
+- Provider performance metrics (latency, success rate, cost)
+- Actionable recommendations for improving JSON mode prompts
+- Cost tracking and token usage statistics
 
 ## Status
 
@@ -141,4 +169,5 @@ AgentLeeOps is production-ready through Sprint 17 (LLM Provider Abstraction + Po
   - JSON repair audit trail (metadata in logs/traces)
   - Raw provider output in trace files
   - Trace recording (`.agentleeops/traces/`)
+  - Monitoring dashboard for repair patterns and provider performance
 - Webhook and polling automation modes

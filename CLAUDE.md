@@ -52,6 +52,11 @@ pytest -v tests/
 
 # Validate LLM configuration
 python -m lib.llm.doctor --config config/llm.yaml
+
+# Monitor JSON repair patterns and provider performance
+python tools/repair-monitor.py
+python tools/repair-monitor.py --providers
+python tools/repair-monitor.py --all
 ```
 
 ## Architecture
