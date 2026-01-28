@@ -143,5 +143,12 @@ Post-Sprint 17 cleanup and performance improvements.
   - Token savings estimation (~4 chars = 1 token)
   - Integrated into LLMClient.complete() with compress parameter
   - 27 comprehensive tests added (213/213 passing)
-- [ ] Add provider health checks endpoint
+- [x] Provider health checks - Completed with `lib/llm/health.py`
+  - Real connectivity tests with minimal LLM requests
+  - Latency measurement for each provider
+  - Check all providers or specific ones
+  - JSON and human-readable output formats
+  - CLI: `python -m lib.llm.health [--provider NAME] [--json]`
+  - Exit codes for CI/CD integration (0=healthy, 1=unhealthy)
+  - 16 comprehensive tests added (229/229 passing)
 - [ ] Performance profiling of agent loops

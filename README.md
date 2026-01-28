@@ -117,11 +117,36 @@ pytest tests/
 pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 ```
 
-The test suite (213 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, prompt compression, task field parsing, workspace management, and Sprint 17 production readiness fixes.
+The test suite (229 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, prompt compression, provider health checks, task field parsing, workspace management, and Sprint 17 production readiness fixes.
 
 ## Monitoring & Observability
 
-AgentLeeOps includes comprehensive monitoring tools for LLM operations:
+AgentLeeOps includes comprehensive monitoring and health check tools for LLM operations:
+
+### Provider Health Checks
+
+```bash
+# Check all configured providers
+python -m lib.llm.health
+
+# Check specific provider
+python -m lib.llm.health --provider openrouter
+
+# Custom timeout (default: 10s)
+python -m lib.llm.health --timeout 30
+
+# Export as JSON
+python -m lib.llm.health --json
+```
+
+The health check system:
+- Tests actual connectivity by making minimal LLM requests
+- Reports latency for each provider
+- Validates provider configuration and availability
+- Supports checking all providers or specific ones
+- Returns non-zero exit code if any provider is unhealthy (useful for CI/CD)
+
+### Performance Monitoring
 
 ```bash
 # View JSON repair patterns and statistics
