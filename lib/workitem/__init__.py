@@ -12,6 +12,7 @@ from lib.workitem.types import (
     WorkItemState,
 )
 from lib.workitem.protocol import WorkItemProvider
+from lib.workitem.config import load_provider_config, get_provider_config
 
 __all__ = [
     "WorkItem",
@@ -19,4 +20,6 @@ __all__ = [
     "WorkItemQuery",
     "WorkItemState",
     "WorkItemProvider",
+    "load_provider_config",
+    "get_provider_config",
 ]

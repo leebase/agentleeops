@@ -18,7 +18,7 @@
     - `tests/test_workitem_types.py`: Unit tests ensuring data integrity.
   - **Verification:** `pytest tests/test_workitem_types.py` passes.
 
-- [ ] **Sprint 1.2: Kanboard Provider (Read-Only)**
+- [x] **Sprint 1.2: Kanboard Provider (Read-Only)**
   - **Goal:** Implement fetching data from Kanboard via the new protocol.
   - **Deliverables:**
     - `lib/workitem/providers/kanboard.py`: `KanboardWorkItemProvider` class (init, get_work_item).

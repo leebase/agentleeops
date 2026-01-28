@@ -1,0 +1,28 @@
+# WorkItem Provider Configuration
+# Environment variables take precedence over values here
+
+default_provider: kanboard
+
+providers:
+  kanboard:
+    # Connection settings (use env vars for secrets)
+    url: ${KANBOARD_URL}
+    user: ${KANBOARD_USER}
+    token: ${KANBOARD_TOKEN}
+    
+    # Default project (can be overridden per-call)
+    project_id: 1
+    
+    # Column-to-state mapping
+    # Maps Kanboard column names to logical WorkItemState values
+    column_mapping:
+      "1. Inbox": inbox
+      "2. Design Draft": design_draft
+      "3. Design Approved": design_approved
+      "4. Planning Draft": planning_draft
+      "5. Plan Approved": plan_approved
+      "6. Tests Draft": tests_draft
+      "7. Tests Approved": tests_approved
+      "8. Ralph Loop": implementation
+      "9. Final Review": final_review
+      "10. Done": done
