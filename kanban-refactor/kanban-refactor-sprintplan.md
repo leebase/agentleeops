@@ -10,7 +10,7 @@
 ## Epic 1: Core Abstraction & Kanboard Provider
 **Goal:** Establish the `WorkItem` data structures and a working Kanboard implementation of the provider protocol.
 
-- [ ] **Sprint 1.1: Interfaces & Data Structures**
+- [x] **Sprint 1.1: Interfaces & Data Structures**
   - **Goal:** Define the exact Python protocols and Data Classes.
   - **Deliverables:**
     - `lib/workitem/types.py`: `WorkItem`, `WorkItemIdentity` (provider, external_id, url), `WorkItemQuery`, `WorkItemState` (Enum).
