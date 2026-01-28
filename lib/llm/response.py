@@ -28,6 +28,7 @@ class LLMResponse:
     raw: dict[str, Any] | str | None = None
     request_id: str = ""
     elapsed_ms: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Ensure request_id is set."""

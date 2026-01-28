@@ -13,7 +13,7 @@ import subprocess
 import time
 import re
 from pathlib import Path
-from lib.opencode import run_opencode
+from lib.llm import LLMClient
 from lib.task_fields import get_task_fields
 from lib.workspace import get_workspace_path, safe_write_file
 from lib.ratchet import verify_integrity
@@ -126,7 +126,12 @@ def run_ralph_agent(task_id: str, title: str, dirname: str, kb_client, project_i
         prompt = prompt.replace("{{current_code}}", current_code)
 
         # Call LLM
-        llm_response = run_opencode(prompt, model="gpt-4o")
+        llm = LLMClient.from_config("config/llm.yaml", workspace=str(workspace))
+        response = llm.complete(
+            role="coder",  # Implementation work, not planning
+            messages=[{"role": "user", "content": prompt}],
+        )
+        llm_response = response.text
 
         # Extract and Validate Code (Syntax Guard)
         new_code, syntax_error = safe_extract_python(llm_response)

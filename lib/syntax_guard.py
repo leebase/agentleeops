@@ -85,18 +85,29 @@ def safe_extract_python(llm_response: str) -> Tuple[str, str]:
     return code, ""
 
 
-def safe_extract_json(llm_response: str) -> Tuple[str, str]:
+def safe_extract_json(llm_response: str, use_repair: bool = False) -> Tuple[str, str]:
     """
     Extract and validate JSON from LLM response.
 
     Args:
         llm_response: Full LLM response text
+        use_repair: If True, attempt to repair malformed JSON
 
     Returns:
         Tuple of (json_str, error). If error is non-empty, json should not be used.
     """
     content = extract_code_block(llm_response, "json")
     is_valid, error = validate_json(content)
+
+    if not is_valid and use_repair:
+        # Try to repair the JSON
+        from lib.llm.json_repair import safe_repair_json
+        repaired, repair_error, was_repaired, method = safe_repair_json(content)
+        if not repair_error:
+            return repaired, ""
+        # Repair failed, return original error
+        return "", f"Invalid JSON: {error}"
+
     if not is_valid:
         return "", f"Invalid JSON: {error}"
     return content, ""

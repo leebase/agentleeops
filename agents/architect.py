@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from lib.opencode import call_opencode, OpenCodeError
+from lib.llm import LLMClient
 from lib.workspace import setup_workspace, validate_dirname, safe_write_file
 
 
@@ -26,22 +26,24 @@ def generate_design(
     title: str,
     context_mode: str,
     acceptance_criteria: str,
+    workspace: Path,
     model: Optional[str] = None
 ) -> str:
     """
-    Generate DESIGN.md content using OpenCode.
+    Generate DESIGN.md content using LLM.
 
     Args:
         title: Story/task title
         context_mode: "NEW" or "FEATURE"
         acceptance_criteria: Acceptance criteria from card
-        model: Optional model override
+        workspace: Workspace path for trace recording
+        model: Optional model override (deprecated, use config/llm.yaml)
 
     Returns:
         Generated DESIGN.md content
 
     Raises:
-        OpenCodeError: If OpenCode call fails
+        RuntimeError: If LLM call fails
     """
     template = load_prompt_template()
 
@@ -51,7 +53,12 @@ def generate_design(
         acceptance_criteria=acceptance_criteria
     )
 
-    return call_opencode(prompt, model=model)
+    llm = LLMClient.from_config("config/llm.yaml", workspace=str(workspace))
+    response = llm.complete(
+        role="planner",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.text
 
 
 def run_architect_agent(
@@ -126,9 +133,10 @@ def run_architect_agent(
         design_content = generate_design(
             title=title,
             context_mode=context_mode,
-            acceptance_criteria=acceptance_criteria
+            acceptance_criteria=acceptance_criteria,
+            workspace=workspace
         )
-    except OpenCodeError as e:
+    except Exception as e:
         result["error"] = f"Design generation failed: {e}"
         post_comment(f"**ARCHITECT_AGENT Failed**\n\n{result['error']}")
         return result

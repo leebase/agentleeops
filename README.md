@@ -117,18 +117,22 @@ pytest tests/
 pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 ```
 
-The test suite (90+ tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction, task field parsing, and workspace management.
+The test suite (135+ tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair, task field parsing, and workspace management.
 
 ## Status
 
-AgentLeeOps is operational through Phase 3 with Phase 4 (LLM Provider Abstraction) in progress. See `sprintPlan.md` for detailed progress tracking.
+AgentLeeOps is operational through Sprint 17 (LLM Provider Abstraction complete). See `sprintPlan.md` for detailed progress tracking.
 
 **Current capabilities:**
 - Full 10-column Kanboard workflow
-- 6 agents (Architect, PM, Spawner, Test, Ralph, Governance)
-- Pluggable LLM provider system with role-based routing (Sprint 16)
-- OpenRouter HTTP provider with Claude Sonnet 4
+- 6 agents (Architect, PM, Spawner, Test, Ralph, Governance) - all using LLM abstraction
+- Pluggable LLM provider system with role-based routing (Sprint 16-17)
+  - OpenRouter HTTP provider with Claude Sonnet 4
+  - OpenCode CLI provider with JSON repair (tested: gpt-5.2-codex)
+  - Gemini CLI provider with Gemini 3 support (tested: gemini-3-flash-preview)
+  - Configuration validation via `python -m lib.llm.doctor`
 - Ratchet governance with SHA256 hash verification
 - LLM syntax guards to prevent refusal injection
+- JSON repair for CLI output (trailing commas, unquoted keys, etc.)
 - Enhanced trace recording (`.agentleeops/traces/`)
 - Webhook and polling automation modes

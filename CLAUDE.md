@@ -17,7 +17,7 @@ cp .env.example .env  # Edit with your KANBOARD_TOKEN
 
 **Prerequisites:**
 - Kanboard running on Docker port 88 with MetaMagik plugin
-- OpenCode CLI installed (`opencode --version`)
+- LLM provider configured (OpenRouter API key OR OpenCode CLI installed)
 
 ## Running the System
 
@@ -38,6 +38,9 @@ python orchestrator.py --once
 ## Testing
 
 ```bash
+# Activate virtual environment
+source .venv/bin/activate
+
 # Run all tests
 pytest tests/
 
@@ -46,6 +49,9 @@ pytest tests/test_atomic_01.py
 
 # Run with verbose output
 pytest -v tests/
+
+# Validate LLM configuration
+python -m lib.llm.doctor --config config/llm.yaml
 ```
 
 ## Architecture
@@ -74,7 +80,13 @@ Kanboard (Port 88) → Webhook Server → Orchestrator → Agents → ~/projects
 
 - `lib/task_fields.py`: Task field handling (metadata API with YAML fallback)
 - `lib/workspace.py`: Workspace creation (`~/projects/<dirname>/`) and `safe_write_file()`
-- `lib/opencode.py`: LLM API wrapper
+- `lib/llm/`: LLM provider abstraction (Sprint 16-17)
+  - `client.py`: Role-based LLM client
+  - `config.py`: Configuration loading from `config/llm.yaml`
+  - `providers/`: Provider implementations (OpenRouter HTTP, OpenCode CLI)
+  - `json_repair.py`: JSON repair for CLI output
+  - `doctor.py`: Configuration validation command
+- `lib/opencode.py`: Legacy LLM wrapper (deprecated, use `lib/llm/` instead)
 - `lib/ratchet.py`: File locking/integrity via `.agentleeops/ratchet.json`
 - `lib/logger.py`: Structured JSON logging
 - `lib/trace.py`: Trace store for observability
@@ -124,6 +136,53 @@ Orchestrator uses tags to prevent re-processing:
 - `locking` / `locked`
 - `spawning-started` / `spawned`
 
+## LLM Configuration (Sprint 16-17)
+
+AgentLeeOps uses a pluggable LLM provider system defined in `config/llm.yaml`:
+
+```yaml
+llm:
+  default_role: planner
+
+  providers:
+    openrouter:  # HTTP API provider (recommended)
+      type: openrouter_http
+      base_url: "https://openrouter.ai/api/v1"
+      api_key_env: "OPENROUTER_API_KEY"
+
+    opencode:  # CLI provider (optional)
+      type: opencode_cli
+      command: "opencode"
+
+  roles:
+    planner:  # For DESIGN.md, prd.json, tests
+      provider: openrouter
+      model: "anthropic/claude-sonnet-4"
+      temperature: 0.2
+
+    coder:  # For Ralph's implementation loop
+      provider: openrouter
+      model: "anthropic/claude-sonnet-4"
+      temperature: 0.1
+```
+
+**Usage in agents:**
+```python
+from lib.llm import LLMClient
+
+llm = LLMClient.from_config("config/llm.yaml", workspace=workspace)
+response = llm.complete(
+    role="planner",  # or "coder"
+    messages=[{"role": "user", "content": prompt}],
+)
+design_content = response.text
+```
+
+**Validate configuration:**
+```bash
+python -m lib.llm.doctor --config config/llm.yaml
+```
+
 ## Environment Variables
 
 | Variable | Description |
@@ -131,7 +190,9 @@ Orchestrator uses tags to prevent re-processing:
 | `KANBOARD_URL` | JSON-RPC endpoint (default: `http://localhost:88/jsonrpc.php`) |
 | `KANBOARD_USER` | API user (default: `jsonrpc`) |
 | `KANBOARD_TOKEN` | API token (required) |
-| `OPENCODE_CMD` | OpenCode CLI binary (default: `opencode`) |
+| **LLM Providers** | |
+| `OPENROUTER_API_KEY` | OpenRouter API key (required for openrouter_http provider) |
+| `OPENCODE_CMD` | OpenCode CLI binary (default: `opencode`, optional for opencode_cli provider) |
 
 ## Key Files
 

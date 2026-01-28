@@ -93,12 +93,21 @@ Pluggable LLM provider system with role-based routing.
 
 ### Sprint 17: CLI Providers + Full Rollout (Phase B)
 **Priority:** P1
-**Status:** open
+**Status:** complete
 
 **Deliverables:**
-- [ ] OpenCode CLI provider
-- [ ] Gemini CLI provider
-- [ ] JSON repair for CLI output
-- [ ] All agents converted to use LLMClient
-- [ ] Doctor command for configuration validation
-- [ ] Documentation
+- [x] OpenCode CLI provider (`lib/llm/providers/opencode_cli.py`)
+- [x] JSON repair for CLI output (`lib/llm/json_repair.py`)
+  - Multi-strategy repair: markdown extraction, trailing commas, unquoted keys, single quotes
+  - 28 comprehensive tests
+- [x] All agents converted to use LLMClient
+  - Architect: `planner` role for DESIGN.md
+  - Test Agent: `planner` role (tests are specs per Double-Blind Rule)
+  - Ralph: `coder` role with all integrity guards maintained
+- [x] Doctor command for configuration validation (`python -m lib.llm.doctor`)
+- [x] Documentation updated (CLAUDE.md, README.md)
+- [x] 17 new CLI provider tests (all passing)
+- [x] Total test count: 135+ tests passing
+
+**Deferred:**
+- [ ] Gemini CLI provider (future, optional)

@@ -11,7 +11,7 @@ Responsibility:
 import json
 import re
 from pathlib import Path
-from lib.opencode import run_opencode
+from lib.llm import LLMClient
 from lib.task_fields import get_task_fields
 from lib.workspace import get_workspace_path, safe_write_file
 from lib.syntax_guard import safe_extract_python
@@ -82,7 +82,12 @@ def run_test_agent(task_id: str, title: str, dirname: str, kb_client, project_id
 
     # 5. Call LLM
     print(f"  [Test Agent] Asking LLM to write tests/test_{atomic_id_clean}.py...")
-    llm_response = run_opencode(prompt, model="gpt-4o")
+    llm = LLMClient.from_config("config/llm.yaml", workspace=str(workspace))
+    response = llm.complete(
+        role="planner",  # Tests are specs, not implementation (Double-Blind Rule)
+        messages=[{"role": "user", "content": prompt}],
+    )
+    llm_response = response.text
 
     # 6. Extract and Validate Code (Syntax Guard)
     code_block, syntax_error = safe_extract_python(llm_response)
