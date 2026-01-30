@@ -1,4 +1,4 @@
-# AgentLeeOps — Product Definition v1.3 (Governance Edition)
+# AgentLeeOps — Product Definition v1.4 (LLM Abstraction Edition)
 
 ## 1. Executive Summary
 
@@ -60,5 +60,6 @@ To prevent "LLM Refusal Injection" (model responds with prose instead of code):
 
 - **Control Plane:** Kanboard (Docker on Port 88).
 - **Orchestrator:** Python Script (`orchestrator.py`) polling Port 88.
-- **Agent Engine:** OpenCode (configured with `.opencode/rules.md`).
+- **Agent Architecture:** Role-based Agents using `lib.llm` abstraction.
+- **LLM Providers:** Pluggable (OpenRouter, OpenCode CLI, Gemini CLI) via `config/llm.yaml`.
 - **Verification:** pytest (Backend).
