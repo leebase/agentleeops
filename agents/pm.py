@@ -84,24 +84,29 @@ def run_pm_agent(task_id: str, title: str, dirname: str, context_mode: str, acce
 
     # 7. Attach to Kanboard
     try:
+        import base64
+        with open(prd_path, 'r') as f:
+            content = f.read()
+        encoded = base64.b64encode(content.encode()).decode()
+        
         # Check if file already attached, remove if so (to allow updates)
-        existing_files = kb_client.get_task_files(task_id=task_id)
-        for f in existing_files:
-            if f['name'] == "prd.json":
-                kb_client.remove_task_file(task_id=task_id, file_id=f['id'])
+        existing_files = kb_client.execute('getAllTaskFiles', task_id=int(task_id))
+        for f in (existing_files or []):
+            if f.get('name') == "prd.json":
+                kb_client.execute('removeTaskFile', file_id=int(f['id']))
 
         # Upload
-        with open(prd_path, 'rb') as f:
-            kb_client.create_task_file(
-                task_id=task_id,
-                project_id=project_id,
-                name="prd.json",
-                file=f
-            )
+        kb_client.execute(
+            'createTaskFile',
+            project_id=project_id,
+            task_id=int(task_id),
+            filename="prd.json",
+            blob=encoded
+        )
         
         # Add comment
         kb_client.create_comment(
-            task_id=task_id,
+            task_id=int(task_id),
             content=f"**PM_AGENT**: Generated Implementation Plan (`prd.json`) with {len(prd_data['stories'])} stories.\n\nPlease review in the 'Files' section."
         )
 

@@ -42,3 +42,6 @@ h
 
 # LLM traces (Sprint 16)
 .agentleeops/traces/
+
+# Hello Fire tests (local only)
+tests/hello-fire/

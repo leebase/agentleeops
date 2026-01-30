@@ -25,25 +25,26 @@ llm:
   roles:
     planner:
       provider: openrouter
-      model: "anthropic/claude-sonnet-4"
+      model: "x-ai/grok-code-fast-1"
       temperature: 0.2
       max_tokens: 4000
-      json_mode: true
+      json_mode: false
 
     coder:
       provider: openrouter
-      model: "anthropic/claude-sonnet-4"
+      model: "x-ai/grok-code-fast-1"
       temperature: 0.1
       max_tokens: 8000
 
     reviewer:
       provider: openrouter
-      model: "anthropic/claude-sonnet-4"
+      model: "x-ai/grok-code-fast-1"
       temperature: 0.2
       max_tokens: 2000
 
     summarizer:
       provider: openrouter
-      model: "anthropic/claude-haiku"
+      model: "x-ai/grok-code-fast-1"
       temperature: 0.3
       max_tokens: 2000
+

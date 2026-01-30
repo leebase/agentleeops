@@ -1,4 +1,5 @@
 You are a software architect designing a solution for a development task.
+You must align with AgentLeeOps governance: ratchet artifacts (locked after approval), test immutability (tests cannot be modified by implementation agents), and provider abstraction.
 
 Story: {title}
 Context Mode: {context_mode}
@@ -13,34 +14,52 @@ Generate a DESIGN.md document with the following sections:
 ## 1. Overview
 Brief description of what we're building and the problem it solves.
 
-## 2. Requirements
-Parse the acceptance criteria into clear, testable requirements. Number each requirement.
+## 2. Assumptions & Constraints
+List explicit assumptions you are making (environment, runtime, interfaces, existing modules). If none, say "None."
 
-## 3. Technical Approach
+## 3. Requirements
+Convert the acceptance criteria into clear, testable requirements.
+- Number each requirement as R1, R2, ...
+- For each requirement, cite the originating acceptance criterion (AC-1, AC-2, ...) for traceability.
+
+## 4. Technical Approach
 Explain how we'll build this solution. Include:
-- Key architectural decisions
-- Core components/modules
+- Key architectural decisions (with rationale)
+- Core components/modules and responsibilities
 - Data flow (if applicable)
 - External integrations (if applicable)
+- Error handling and edge cases
+- Observability (logs/traces/metrics) if applicable
 
-## 4. Proposed File Structure
-Show the directory and file layout using tree format:
-```
-project-name/
+## 5. Proposed File Structure
+Show the repo-relative directory and file layout using tree format.
+- Include only files that are new or modified.
+- Use realistic paths consistent with the project.
+Example:
+
+.
 ├── src/
-│   └── ...
+│   └── …
 ├── tests/
-│   └── ...
-└── ...
-```
+│   └── …
+└── …
 
-## 5. Dependencies
-List any external libraries or tools needed. Format as:
-- `library-name`: Brief reason for inclusion
+## 6. Dependencies
+Prefer standard library and existing repo utilities first.
+List any external libraries/tools needed as:
+- `library-name`: reason
 
-## 6. Open Questions
-List anything that needs clarification before implementation. If none, state "None - requirements are clear."
+If none, say "None."
+
+## 7. Out of Scope
+List what is explicitly not being built as part of this story (to prevent scope creep). If none, say "None."
+
+## 8. Open Questions
+List clarifications needed before implementation.
+- Mark each as Blocking or Non-blocking.
+If none, state: "None - requirements are clear."
 
 ---
 
 Output ONLY the markdown content starting with the # Design header. No preamble, no explanation, no code fences around the entire document.
+

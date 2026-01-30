@@ -4,7 +4,8 @@ Fan-Out Spawner Agent
 Responsibility:
 1. Triggered when Parent Card is in 'Plan Approved' (Column 5)
 2. Reads prd.json
-3. Spawns Child Cards in 'Tests Draft' (Column 6)
+3. Spawns Child Cards in 'Plan Approved' (same column - gives human control)
+   - Human moves each child to 'Tests Draft' when ready
    - USES DUPLICATION HACK to bypass MetaMagik mandatory field issues.
 4. Links Child Cards to Parent
 5. IMPLEMENTS IDEMPOTENCY, FLOOD CONTROL, and TRANSACTION SAFETY.
@@ -90,12 +91,12 @@ def run_spawner_agent(task_id: str, title: str, dirname: str, kb_client, project
     spawned_count = 0
     skipped_count = 0
     
-    # 6. Find destination column ID (Column 6: "Tests Draft")
+    # 6. Find destination column ID (Column 5: "Plan Approved" - gives human control)
     try:
         cols = kb_client.get_columns(project_id=project_id)
-        dest_col = next((c for c in cols if "Tests Draft" in c['title']), None)
+        dest_col = next((c for c in cols if "Plan Approved" in c['title']), None)
         if not dest_col:
-             return {"success": False, "error": "Could not find 'Tests Draft' column."}
+             return {"success": False, "error": "Could not find 'Plan Approved' column."}
         dest_col_id = int(dest_col['id'])
     except Exception as e:
         return {"success": False, "error": f"Failed to get board columns: {e}"}

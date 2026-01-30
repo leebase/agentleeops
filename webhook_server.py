@@ -61,7 +61,7 @@ TRIGGERS = {
     "4. Planning Draft": "PM_AGENT",
     "5. Plan Approved": "SPAWNER_AGENT",
     "6. Tests Draft": "TEST_AGENT",
-    "7. Tests Approved": "GOVERNANCE_AGENT",
+    "7. Tests Approved": "TEST_CODE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
 }
 
@@ -86,6 +86,10 @@ TAGS = {
     "TEST_AGENT": {
         "started": "tests-started",
         "completed": "tests-generated",
+    },
+    "TEST_CODE_AGENT": {
+        "started": "tests-coding-started",
+        "completed": "tests-coding-generated",
     },
     "RALPH_CODER": {
         "started": "coding-started",
@@ -343,7 +347,7 @@ def process_test_task(kb, task_id: int, project_id: int):
     except TaskFieldError:
         return
 
-    print(f"  Processing Test Generation: {title}")
+    print(f"  Processing Test Plan Generation: {title}")
 
     add_task_tag(kb, project_id, task_id, agent_tags["started"])
     update_status(kb, task_id, agent_status="running", current_phase="tests")
@@ -359,15 +363,68 @@ def process_test_task(kb, task_id: int, project_id: int):
     if result["success"]:
         add_task_tag(kb, project_id, task_id, agent_tags["completed"])
         update_status(kb, task_id, agent_status="completed", current_phase="tests")
-        print(f"  Success: Created {result.get('test_file', 'test file')}")
+        print(f"  Success: Created {result.get('test_plan', 'test plan')}")
         kb.create_comment(
             task_id=task_id,
-            content=f"**TEST_AGENT**: Created test file.\n\nReady for Human Review."
+            content=f"**TEST_AGENT**: Created test plan.\n\nReady for Human Review."
         )
     else:
         update_status(kb, task_id, agent_status="failed", current_phase="tests")
         print(f"  Test Agent Failed: {result['error']}")
         kb.create_comment(task_id=task_id, content=f"**TEST_AGENT Failed**\n\n{result['error']}")
+
+
+def process_test_code_task(kb, task_id: int, project_id: int):
+    """Process a task in the Tests Approved column (Code Generation)."""
+    from agents.test_code_agent import run_test_code_agent
+
+    task = cast(dict, kb.get_task(task_id=task_id))
+    if not task:
+        return
+
+    title = task['title']
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["TEST_CODE_AGENT"]
+
+    if has_tag(tags, agent_tags["completed"]):
+        # Still enforce governance even if code gen is done
+        process_governance_task(kb, task_id, project_id)
+        return
+
+    if has_tag(tags, agent_tags["started"]):
+        return
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return
+
+    print(f"  Processing Test Code Generation: {title}")
+
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="tests")
+
+    result = run_test_code_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id
+    )
+
+    if result["success"]:
+        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        update_status(kb, task_id, agent_status="completed", current_phase="tests")
+        print(f"  Success: Created {result.get('test_file', 'test file')}")
+        
+        # Chain Governance to lock the new tests
+        print("  Chaining Governance to lock tests...")
+        process_governance_task(kb, task_id, project_id)
+    else:
+        update_status(kb, task_id, agent_status="failed", current_phase="tests")
+        print(f"  Test Code Agent Failed: {result['error']}")
+        kb.create_comment(task_id=task_id, content=f"**TEST_CODE_AGENT Failed**\n\n{result['error']}")
 
 
 def process_ralph_task(kb, task_id: int, project_id: int):
@@ -435,6 +492,8 @@ def process_task(kb, task_id: int, project_id: int, action: str):
         process_spawner_task(kb, task_id, project_id)
     elif action == "TEST_AGENT":
         process_test_task(kb, task_id, project_id)
+    elif action == "TEST_CODE_AGENT":
+        process_test_code_task(kb, task_id, project_id)
     elif action == "RALPH_CODER":
         process_ralph_task(kb, task_id, project_id)
 

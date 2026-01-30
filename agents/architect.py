@@ -156,7 +156,8 @@ def run_architect_agent(
     if kb_client:
         try:
             encoded = base64.b64encode(design_content.encode()).decode()
-            kb_client.create_task_file(
+            kb_client.execute(
+                'createTaskFile',
                 project_id=project_id,
                 task_id=int(task_id),
                 filename=design_filename,

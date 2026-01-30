@@ -14,17 +14,24 @@ AgentLeeOps is an orchestration framework for running high-discipline, multi-age
 AgentLeeOps v1.0 defines a Kanboard pipeline with the following columns (left to right):
 
 1. **Inbox** – New work items arrive, minimally triaged.
-2. **Design Draft** – A design agent produces a draft `DESIGN.md` for the card.
-3. **Design Approved** – Lee reviews and approves the design.
-4. **Repo & Tests Draft** – A tests-focused agent drafts or updates tests.
-5. **Tests Approved** – Lee reviews and blesses the tests.
-6. **Planning Draft** – An implementation plan is drafted based on approved tests.
-7. **Plan Approved** – Lee reviews and approves the implementation plan.
-8. **Ralph Loop** – Ralph (the implementation agent) writes code to make tests pass.
-9. **Final Review** – Lee performs final review on code and artifacts.
+2. **Design Draft** – ARCHITECT_AGENT produces `DESIGN.md` for the card.
+3. **Design Approved** – Human reviews design; GOVERNANCE_AGENT locks artifacts.
+4. **Planning Draft** – PM_AGENT generates `prd.json` with atomic stories.
+5. **Plan Approved** – Human reviews plan; SPAWNER_AGENT creates child story cards (remain in this column for human control).
+6. **Tests Draft** – TEST_AGENT generates tests for each story (move stories here one at a time).
+7. **Tests Approved** – Human reviews tests; GOVERNANCE_AGENT locks test files.
+8. **Ralph Loop** – RALPH_CODER implements code to pass tests (move stories here one at a time).
+9. **Final Review** – Human performs final review on code and artifacts.
 10. **Done** – Work is complete and merged.
 
+**Human-Controlled Story Flow:**
+- Parent story stays in "Plan Approved" after spawning
+- Child stories are created in "Plan Approved" for editing
+- Move each child story to "Tests Draft" → "Tests Approved" → "Ralph Loop" one at a time
+- This prevents explosion of simultaneous LLM calls
+
 Each column has an explicit owner and required artifacts (e.g., `DESIGN.md`, test files, plan documents), as defined in `product-definition.md`.
+
 
 ## Core Rules
 
