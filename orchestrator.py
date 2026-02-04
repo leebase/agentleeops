@@ -38,6 +38,7 @@ TRIGGERS = {
     "6. Tests Draft": "TEST_AGENT",
     "7. Tests Approved": "GOVERNANCE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
+    "9. Code Review": "CODE_REVIEW_AGENT",
 }
 
 # Tags for state tracking
@@ -70,6 +71,11 @@ TAGS = {
         "started": "coding-started",
         "completed": "coding-complete",
         "failed": "coding-failed",
+    },
+    "CODE_REVIEW_AGENT": {
+        "started": "review-started",
+        "completed": "review-complete",
+        "failed": "review-failed",
     },
 }
 
@@ -491,6 +497,62 @@ def process_ralph_task(kb, task: dict, project_id: int) -> bool:
         return False
 
 
+def process_code_review_task(kb, task: dict, project_id: int) -> bool:
+    """
+    Process a task in the Code Review column.
+    """
+    from agents.code_review import run_code_review_agent
+
+    task_id = task["id"]
+    title = task["title"]
+
+    tags = get_task_tags(kb, task_id)
+    agent_tags = TAGS["CODE_REVIEW_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
+
+    if has_tag(tags, agent_tags["completed"]):
+        return False
+    if has_tag(tags, agent_tags["started"]):
+        return False
+
+    try:
+        fields = get_task_fields(kb, task_id)
+        dirname = fields["dirname"]
+    except TaskFieldError:
+        return False
+
+    log.info(f"Processing Code Review: {title}", task_id=task_id)
+
+    add_task_tag(kb, project_id, task_id, agent_tags["started"])
+    update_status(kb, task_id, agent_status="running", current_phase="review")
+
+    result = run_code_review_agent(
+        task_id=str(task_id),
+        title=title,
+        dirname=dirname,
+        kb_client=kb,
+        project_id=project_id,
+    )
+
+    if result["success"]:
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
+        update_status(kb, task_id, agent_status="completed", current_phase="review")
+        log.info(
+            "Code review completed",
+            task_id=task_id,
+            overall_status=result.get("overall_status"),
+            findings=result.get("finding_count"),
+        )
+        return True
+
+    _mark_agent_failed(kb, project_id, task_id, agent_tags)
+    update_status(kb, task_id, agent_status="failed", current_phase="review")
+    log.error(f"Code Review Failed: {result['error']}", task_id=task_id)
+    kb.create_comment(task_id=task_id, user_id=1, content=f"**CODE_REVIEW_AGENT Failed**\n\n{result['error']}")
+    return False
+
+
 def process_task(kb, task: dict, action: str, project_id: int) -> bool:
     """
     Route task to appropriate agent.
@@ -520,6 +582,9 @@ def process_task(kb, task: dict, action: str, project_id: int) -> bool:
 
     elif action == "RALPH_CODER":
         return process_ralph_task(kb, task, project_id)
+
+    elif action == "CODE_REVIEW_AGENT":
+        return process_code_review_task(kb, task, project_id)
 
     return False
 
