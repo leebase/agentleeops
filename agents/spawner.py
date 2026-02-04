@@ -49,6 +49,21 @@ def run_spawner_agent(task_id: str, title: str, dirname: str, kb_client, project
     """
     print(f"  [Spawner] Starting fan-out for '{title}'...")
 
+    # 0. Recursion Guard: Am I a child?
+    try:
+        # Check if I have an atomic_id (meaning I am a child)
+        if isinstance(kb_client, object): # Duck typing check or just try calling it
+             current_meta = kb_client.get_task_metadata(task_id=int(task_id))
+        else:
+             current_meta = {}
+             
+        if current_meta and current_meta.get("atomic_id"):
+             msg = f"Recursion Guard: Task '{title}' is a Child Card ({current_meta['atomic_id']}). Aborting spawn."
+             print(f"  [Spawner] {msg}")
+             return {"success": False, "error": msg}
+    except Exception as e:
+        print(f"  [Spawner] Warning: Failed to check metadata for recursion guard: {e}")
+
     # 1. Setup Workspace Paths
     workspace = get_workspace_path(dirname)
     prd_path = workspace / "prd.json"

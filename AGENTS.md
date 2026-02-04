@@ -1,213 +1,106 @@
 # AGENTS.md
 
-**AgentLeeOps – Agent Operating Model & Safety Charter**
+**AgentLeeOps – Agent Operating Model & Repo Rules**
 
-This document defines the non-negotiable safety rules, operating model, and expectations for all AI agents working in this repository (including Claude, Gemini, Codex, Antigravity, OpenCode, etc.).
-
-**This is not documentation for users.**  
-**This is a constitution for agents.**
+This file guides all coding agents operating in this repository. It merges safety rules, execution model, and repo-specific developer workflow.
 
 ---
 
-## 1. Non-Negotiable Safety Invariants (MUST FOLLOW)
+## 1) Non-Negotiable Safety Rules
 
-These rules override all other instructions.
-
-### 1.1 Ratchet Governance (Immutable Artifacts)
-
-Once an artifact is approved (design, tests, schemas, etc.), it is ratcheted:
-- Approved files **MUST NOT** be modified
-- Deleting and recreating an approved file is forbidden
-- Any attempt to write must pass ratchet checks
-
-If a change is required:
-- Create a new version
-- Or propose a change via a new work item
-
-### 1.2 Test Immutability (Double-Blind Rule)
-
-Tests represent the contract, not an output.
-- Agents **MUST NOT** modify tests to make code pass
-- Tests are written before code
-- Code must conform to tests, not vice versa
-
-**Violations invalidate the run.**
-
-### 1.3 Human-in-the-Loop Gates
-
-Agents may draft, suggest, and analyze, but:
-- Humans approve designs
-- Humans approve tests
-- Humans approve state transitions
-
-Agents may not bypass approval gates under any circumstances.
-
-### 1.4 Determinism over Creativity
-
-**Prefer:**
-- Existing tools
-- Existing libraries
-- Deterministic code paths
-
-**Avoid:**
-- One-off scripts
-- Ad-hoc logic
-- Re-implementing functionality that already exists
-
-### 1.5 Idempotency & Flood Control
-
-Agents must assume:
-- Re-runs happen
-- Failures happen
-- Partial state exists
-
-**All actions must be safe to retry.**
+- **Ratchet governance:** Approved artifacts (designs/tests/schemas/configs) are immutable. Do not overwrite, delete/recreate, or bypass ratchet checks. If changes are required, create a new version or new work item.
+- **Test immutability (double-blind):** Tests are the contract. Do not edit tests to make code pass. Implementation must conform to tests.
+- **Human gates:** Humans approve designs, tests, and state transitions. Agents never bypass approvals.
+- **Determinism > creativity:** Prefer existing tools/libraries/helpers; avoid ad-hoc logic or reimplementation.
+- **Idempotency:** Actions must be safe to retry; assume partial state and failures.
 
 ---
 
-## 2. AgentLeeOps Operating Model (How Work Actually Happens)
+## 2) Operating Model (Layered)
 
-AgentLeeOps follows a three-layer operating model.  
-*This is conceptual, not a directory mandate.*
-
-### 2.1 Directive Layer (What Should Happen)
-
-Defines intent, not execution.
-
-**Examples:**
-- Work items
-- Logical states (Design Draft, Tests Approved, etc.)
-- Workflow configuration
-- Prompt templates
-- Policies and constraints
-
-**This layer answers:** “What is the desired outcome?”
-
-### 2.2 Orchestration Layer (What To Do Next)
-
-Responsible for decision-making, not implementation.
-
-**Examples:**
-- Orchestrator logic
-- State machine transitions
-- Agent selection
-- Capability checks
-
-**This layer answers:** “Given the current state, what action is valid?”
-
-### 2.3 Execution Layer (How It Is Done)
-
-Pure, deterministic execution.
-
-**Examples:**
-- LLM client calls
-- File operations
-- Validation
-- Parsing
-- External API calls
-
-**This layer answers:** “Perform the action safely and reproducibly.”
-
-**Agents MUST NOT embed orchestration logic inside execution code.**
+- **Directive layer:** Intent and artifacts (e.g., DESIGN.md, prd.json, policies).
+- **Orchestration layer:** Decide what happens next (state machine, agent selection, capability checks).
+- **Execution layer:** Deterministic operations (LLM calls, file ops, validation). Do not embed orchestration logic inside execution code.
 
 ---
 
-## 3. Tools-First Principle
+## 3) Build / Lint / Test Commands
 
-Before writing new code, agents **MUST**:
-1. Search for an existing tool
-2. Search for an existing library
-3. Search for an existing helper function
-4. *Only then* consider writing new code
+### Environment setup
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-If new code is written:
-- It should be reusable
-- It should be testable
-- It should live in a logical library/module
+### Build
+- No explicit build step in this repo; run Python entrypoints directly (e.g., `python orchestrator.py`).
 
----
+### Lint / Format
+- No repo-configured lint/format tool detected. Follow style conventions below.
 
-## 4. Self-Annealing System Loop
+### Tests (pytest)
+```bash
+# All tests
+pytest tests/
 
-AgentLeeOps is designed to improve itself.
+# Multiple specific modules
+pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 
-When failures or deficiencies are observed, the correct response is:
-1. **Identify the failure** (test, review, trace, monitoring)
-2. **Improve the system, not just the output**:
-   - prompts
-   - templates
-   - tools
-   - validation
-   - governance rules
-3. **Add or update tests**
-4. **Re-run safely**
+# Single test file
+pytest tests/test_atomic_01.py
 
-**Fixes should strengthen the platform, not patch around symptoms.**
+# Single test case (pytest node id)
+pytest tests/test_workitem_client.py::test_parse_task_fields -v
+```
 
----
-
-## 5. Intermediates vs Deliverables
-
-Agents must distinguish between:
-
-### 5.1 Deliverables (Committed)
-- Source code
-- Tests
-- Schemas
-- Approved configs
-- Documentation
-
-*These are durable, reviewed, and governed.*
-
-### 5.2 Intermediates (Never Committed)
-- Traces
-- Logs
-- Temporary analysis
-- Scratch files
-- Debug output
-
-*These live in runtime/state directories and must remain disposable.*
+### LLM utilities (repo tools)
+```bash
+python -m lib.llm.doctor --config config/llm.yaml
+python -m lib.llm.health --provider openrouter
+python tools/repair-monitor.py --all
+python tools/profile-report.py --latest
+```
 
 ---
 
-## 6. Capability-Aware Behavior
+## 4) Code Style Guidelines
 
-Not all providers or systems support the same features.
+### Python conventions
+- **Formatting:** 4-space indentation, PEP 8 spacing, 1 blank line between logical blocks, 2 blank lines between top-level defs.
+- **Imports:** Standard library → third-party → local, separated by a blank line. Prefer explicit imports.
+- **Typing:** Use PEP 604 unions (`Path | None`), `list[dict[str, str]]`, and `typing.Any` when needed. Type hints encouraged for public interfaces and complex data.
+- **Naming:** `snake_case` for functions/vars, `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants.
+- **Docstrings:** Triple-quoted docstrings for modules and non-trivial functions.
 
-Agents must:
-- Detect capabilities
-- Degrade gracefully
-- Never assume comments, tags, or state mutation are available
+### Error handling
+- Use specific exceptions when possible; use broad `except Exception` only to isolate external dependencies and return a structured failure.
+- Prefer returning `{ "success": bool, "error": str }` patterns in agent flows (see `agents/*.py`).
+- Preserve context in error messages; avoid swallowing errors without logging.
 
-**Capability checks precede action.**
+### Logging
+- Use structured logging via `lib.logger.get_logger()` and pass `extra` fields for context (agent, task_id, etc.).
+- Avoid printing secrets; CLI scripts may use `print()` for user-facing output.
 
----
-
-## 7. What Agents Are Not Allowed To Do
-
-Agents **MUST NOT**:
-- Bypass approval gates
-- Modify ratcheted artifacts
-- Alter tests to satisfy code
-- Introduce hidden side effects
-- Treat the system as stateless
-- Assume ownership of work item identity
-
----
-
-## 8. Final Principle
-
-**Agents are accelerators, not decision-makers.**
-
-- Speed is valuable.
-- Safety is mandatory.
-- Human intent is authoritative.
-
-**If uncertain:**
-- Stop
-- Report
-- Ask for clarification
+### Filesystem and subprocess
+- Prefer `pathlib.Path` for paths.
+- Use `subprocess.run([...], capture_output=True, text=True)` and check `returncode`.
+- Respect ratchet guard: use `lib.workspace.safe_write_file()` for artifact writes.
 
 ---
 
-*This file exists to keep AgentLeeOps fast and correct.*
+## 5) Repo-Specific Constraints
+
+- Do not modify files under `tests/` unless the card is explicitly moved back to a test-authoring state.
+- Ratcheted artifacts are locked via `.agentleeops/ratchet.json` and must not be modified.
+- Workspace naming rules: lowercase letters, digits, and dashes only; no dots or slashes.
+
+---
+
+## 6) Cursor / Copilot Rules
+
+- No `.cursor/rules/`, `.cursorrules`, or `.github/copilot-instructions.md` files detected in this repo.
+
+---
+
+*This file exists to keep AgentLeeOps fast, correct, and safe.*

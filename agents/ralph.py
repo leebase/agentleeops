@@ -96,10 +96,18 @@ def run_batch_ralph(task_id, children, title, dirname, workspace, kb_client, pro
     Executes Ralph in Batch Mode for a Parent Task.
     Implements all child stories at once.
     """
-    print(f"  [Ralph] Batch Mode detected. Implementing {len(children)} stories: {[c['atomic_id'] for c in children]}")
+    # 1. Deduplicate Children
+    seen = set()
+    unique_children = []
+    for c in children:
+        if c["atomic_id"] not in seen:
+            unique_children.append(c)
+            seen.add(c["atomic_id"])
     
-    # 1. Aggregate Context
-    atomic_ids = [c["atomic_id"] for c in children]
+    print(f"  [Ralph] Batch Mode detected. Implementing {len(unique_children)} stories: {[c['atomic_id'] for c in unique_children]}")
+    
+    # 2. Verify Tests Exist
+    atomic_ids = [c["atomic_id"] for c in unique_children]
     
     # 2. Verify Tests Exist
     missing_tests = []
