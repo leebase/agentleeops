@@ -48,6 +48,12 @@ Each column has an explicit owner and required artifacts (e.g., `DESIGN.md`, tes
 - **Artifacts over Chat**
   - Durable decisions, designs, and plans live in version-controlled artifacts (e.g., `DESIGN.md`, plan docs) rather than transient chat.
 
+- **Agent Tag State + Auto-Retry**
+  - Each agent uses tags to track progress: `*-started`, `*-complete`, and `*-failed`.
+  - On failure, orchestrator/webhook remove `*-started` and add `*-failed` so the task is not stuck.
+  - On success, orchestrator/webhook add `*-complete` and clear any stale `*-failed`.
+  - If a task has both `*-failed` and `*-started` (legacy/stale state), the system auto-clears `*-started` to unblock retries.
+
 ## Card Input Contract
 
 Every Kanboard card is expected to provide a YAML input block (typically in its description) with at least:

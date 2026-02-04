@@ -49,6 +49,17 @@ To prevent "LLM Refusal Injection" (model responds with prose instead of code):
 3.  **Rejection & Retry:** Invalid output is rejected and the agent retries (up to MAX_RETRIES).
 4.  **Implementation:** `lib/syntax_guard.py` provides `safe_extract_python()` and `safe_extract_json()`.
 
+### 4.5 Agent State Tags and Retry Unblocking
+The orchestrator and webhook server track execution state with task tags and metadata:
+- **Started tags:** e.g., `design-started`, `planning-started`, `spawning-started`, `tests-started`, `coding-started`
+- **Completed tags:** e.g., `design-generated`, `planning-generated`, `spawned`, `tests-generated`, `coding-complete`
+- **Failed tags:** e.g., `design-failed`, `planning-failed`, `spawning-failed`, `tests-failed`, `coding-failed`
+
+Retry behavior is deterministic:
+1. On failure, the system removes the `*-started` tag and adds `*-failed`.
+2. On success, the system adds `*-complete` and clears stale `*-failed`.
+3. If legacy/stale state has both `*-started` and `*-failed`, the system auto-clears `*-started` so retries can proceed without manual cleanup.
+
 ## 5. The "Context Mode"
 
 | Mode | Trigger | Agent Behavior |
