@@ -70,6 +70,7 @@ TAGS = {
     "ARCHITECT_AGENT": {
         "started": "design-started",
         "completed": "design-generated",
+        "failed": "design-failed",
     },
     "GOVERNANCE_AGENT": {
         "started": "locking",
@@ -78,22 +79,27 @@ TAGS = {
     "PM_AGENT": {
         "started": "planning-started",
         "completed": "planning-generated",
+        "failed": "planning-failed",
     },
     "SPAWNER_AGENT": {
         "started": "spawning-started",
         "completed": "spawned",
+        "failed": "spawning-failed",
     },
     "TEST_AGENT": {
         "started": "tests-started",
         "completed": "tests-generated",
+        "failed": "tests-failed",
     },
     "TEST_CODE_AGENT": {
         "started": "tests-coding-started",
         "completed": "tests-coding-generated",
+        "failed": "tests-coding-failed",
     },
     "RALPH_CODER": {
         "started": "coding-started",
         "completed": "coding-complete",
+        "failed": "coding-failed",
     },
 }
 
@@ -107,6 +113,54 @@ def get_kb_client() -> Any:
         raise RuntimeError("KANBOARD_TOKEN not set")
     token = cast(str, KB_TOKEN)
     return Client(KB_URL, KB_USER, token)
+
+
+def _replace_task_tags(kb, project_id: int, task_id: int, tags: list[str]) -> None:
+    """Replace task tags with deduped values."""
+    seen = set()
+    ordered = []
+    for tag in tags:
+        if tag and tag not in seen:
+            seen.add(tag)
+            ordered.append(tag)
+    kb.set_task_tags(project_id=int(project_id), task_id=int(task_id), tags=ordered)
+
+
+def _remove_task_tag(kb, project_id: int, task_id: int, tag_name: str) -> None:
+    """Remove a tag from a task if present."""
+    tags = get_task_tags(kb, task_id)
+    if tag_name not in tags:
+        return
+    _replace_task_tags(kb, project_id, task_id, [t for t in tags if t != tag_name])
+
+
+def _clear_stale_started(kb, project_id: int, task_id: int, agent_tags: dict[str, str]) -> None:
+    """Unblock retries when failed and started tags both exist."""
+    failed_tag = agent_tags.get("failed")
+    started_tag = agent_tags.get("started")
+    if not failed_tag or not started_tag:
+        return
+    tags = get_task_tags(kb, task_id)
+    if failed_tag in tags and started_tag in tags:
+        _remove_task_tag(kb, project_id, task_id, started_tag)
+
+
+def _mark_agent_failed(kb, project_id: int, task_id: int, agent_tags: dict[str, str]) -> None:
+    """Mark failed state and clear started tag."""
+    started_tag = agent_tags.get("started")
+    failed_tag = agent_tags.get("failed")
+    if started_tag:
+        _remove_task_tag(kb, project_id, task_id, started_tag)
+    if failed_tag:
+        add_task_tag(kb, project_id, task_id, failed_tag)
+
+
+def _mark_agent_succeeded(kb, project_id: int, task_id: int, agent_tags: dict[str, str]) -> None:
+    """Mark success and clear any stale failed tag."""
+    add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+    failed_tag = agent_tags.get("failed")
+    if failed_tag:
+        _remove_task_tag(kb, project_id, task_id, failed_tag)
 
 
 # --- AGENT PROCESSORS ---
@@ -123,6 +177,8 @@ def process_architect_task(kb, task_id: int, project_id: int):
     title = task['title']
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["ARCHITECT_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         print(f"  Task #{task_id} already processed, skipping")
@@ -158,10 +214,11 @@ def process_architect_task(kb, task_id: int, project_id: int):
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="design")
         print(f"  Success: {result.get('design_path', 'DESIGN.md created')}")
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="design")
         print(f"  Failed: {result['error']}")
 
@@ -225,6 +282,8 @@ def process_pm_task(kb, task_id: int, project_id: int):
     title = task['title']
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["PM_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         print(f"  PM Task #{task_id} already processed, skipping")
@@ -260,10 +319,11 @@ def process_pm_task(kb, task_id: int, project_id: int):
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="planning")
         print(f"  Success: prd.json created")
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="planning")
         print(f"  PM Failed: {result['error']}")
         kb.create_comment(task_id=task_id, content=f"**PM_AGENT Failed**\n\n{result['error']}")
@@ -274,6 +334,8 @@ def process_spawner_task(kb, task_id: int, project_id: int):
     from agents.spawner import run_spawner_agent
 
     # Enforce Governance first
+    tags = get_task_tags(kb, task_id)
+    _clear_stale_started(kb, project_id, task_id, TAGS["SPAWNER_AGENT"])
     tags = get_task_tags(kb, task_id)
     if not has_tag(tags, TAGS["GOVERNANCE_AGENT"]["completed"]):
         print("  Chaining Governance before Spawning...")
@@ -312,13 +374,14 @@ def process_spawner_task(kb, task_id: int, project_id: int):
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         print(f"  Success: Spawned {result.get('count')} child cards")
         kb.create_comment(
             task_id=task_id,
             content=f"**SPAWNER**: Created {result.get('count')} child tasks in 'Tests Draft'."
         )
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         print(f"  Spawner Failed: {result['error']}")
         kb.create_comment(task_id=task_id, content=f"**SPAWNER Failed**\n\n{result['error']}")
 
@@ -334,6 +397,8 @@ def process_test_task(kb, task_id: int, project_id: int):
     title = task['title']
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["TEST_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         return
@@ -361,7 +426,7 @@ def process_test_task(kb, task_id: int, project_id: int):
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="tests")
         print(f"  Success: Created {result.get('test_plan', 'test plan')}")
         kb.create_comment(
@@ -369,6 +434,7 @@ def process_test_task(kb, task_id: int, project_id: int):
             content=f"**TEST_AGENT**: Created test plan.\n\nReady for Human Review."
         )
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="tests")
         print(f"  Test Agent Failed: {result['error']}")
         kb.create_comment(task_id=task_id, content=f"**TEST_AGENT Failed**\n\n{result['error']}")
@@ -385,6 +451,8 @@ def process_test_code_task(kb, task_id: int, project_id: int):
     title = task['title']
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["TEST_CODE_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         # Still enforce governance even if code gen is done
@@ -414,7 +482,7 @@ def process_test_code_task(kb, task_id: int, project_id: int):
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="tests")
         print(f"  Success: Created {result.get('test_file', 'test file')}")
         
@@ -422,6 +490,7 @@ def process_test_code_task(kb, task_id: int, project_id: int):
         print("  Chaining Governance to lock tests...")
         process_governance_task(kb, task_id, project_id)
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="tests")
         print(f"  Test Code Agent Failed: {result['error']}")
         kb.create_comment(task_id=task_id, content=f"**TEST_CODE_AGENT Failed**\n\n{result['error']}")
@@ -438,6 +507,8 @@ def process_ralph_task(kb, task_id: int, project_id: int):
     title = task['title']
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["RALPH_CODER"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         return
@@ -465,7 +536,7 @@ def process_ralph_task(kb, task_id: int, project_id: int):
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="coding")
         print(f"  Success: Green Bar in {result.get('iterations', '?')} iterations")
         kb.create_comment(
@@ -473,6 +544,7 @@ def process_ralph_task(kb, task_id: int, project_id: int):
             content=f"**RALPH**: Tests passed in {result.get('iterations', '?')} iterations. Code committed."
         )
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="coding")
         print(f"  Ralph Failed: {result['error']}")
         kb.create_comment(task_id=task_id, content=f"**RALPH Failed**\n\n{result['error']}")

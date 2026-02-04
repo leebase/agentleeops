@@ -45,6 +45,7 @@ TAGS = {
     "ARCHITECT_AGENT": {
         "started": "design-started",
         "completed": "design-generated",
+        "failed": "design-failed",
     },
     "GOVERNANCE_AGENT": {
         "started": "locking",
@@ -53,18 +54,22 @@ TAGS = {
     "PM_AGENT": {
         "started": "planning-started",
         "completed": "planning-generated",
+        "failed": "planning-failed",
     },
     "SPAWNER_AGENT": {
         "started": "spawning-started",
         "completed": "spawned",
+        "failed": "spawning-failed",
     },
     "TEST_AGENT": {
         "started": "tests-started",
         "completed": "tests-generated",
+        "failed": "tests-failed",
     },
     "RALPH_CODER": {
         "started": "coding-started",
         "completed": "coding-complete",
+        "failed": "coding-failed",
     },
 }
 
@@ -86,6 +91,56 @@ from lib.logger import get_logger
 
 log = get_logger("ORCHESTRATOR")
 
+
+def _replace_task_tags(kb, project_id: int, task_id: int, tags: list[str]) -> None:
+    """Replace task tags with deduped values."""
+    seen = set()
+    ordered = []
+    for tag in tags:
+        if tag and tag not in seen:
+            seen.add(tag)
+            ordered.append(tag)
+    kb.set_task_tags(project_id=int(project_id), task_id=int(task_id), tags=ordered)
+
+
+def _remove_task_tag(kb, project_id: int, task_id: int, tag_name: str) -> None:
+    """Remove a tag from a task if present."""
+    tags = get_task_tags(kb, task_id)
+    if tag_name not in tags:
+        return
+    _replace_task_tags(kb, project_id, task_id, [t for t in tags if t != tag_name])
+
+
+def _clear_stale_started(kb, project_id: int, task_id: int, agent_tags: dict[str, str]) -> None:
+    """
+    Unblock retries when a task was previously marked failed but still has a started tag.
+    """
+    failed_tag = agent_tags.get("failed")
+    started_tag = agent_tags.get("started")
+    if not failed_tag or not started_tag:
+        return
+    tags = get_task_tags(kb, task_id)
+    if failed_tag in tags and started_tag in tags:
+        _remove_task_tag(kb, project_id, task_id, started_tag)
+
+
+def _mark_agent_failed(kb, project_id: int, task_id: int, agent_tags: dict[str, str]) -> None:
+    """Mark failed state and remove started tag so retries are possible."""
+    started_tag = agent_tags.get("started")
+    failed_tag = agent_tags.get("failed")
+    if started_tag:
+        _remove_task_tag(kb, project_id, task_id, started_tag)
+    if failed_tag:
+        add_task_tag(kb, project_id, task_id, failed_tag)
+
+
+def _mark_agent_succeeded(kb, project_id: int, task_id: int, agent_tags: dict[str, str]) -> None:
+    """Mark success and clear any stale failed tag."""
+    add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+    failed_tag = agent_tags.get("failed")
+    if failed_tag:
+        _remove_task_tag(kb, project_id, task_id, failed_tag)
+
 def process_architect_task(kb, task: dict, project_id: int) -> bool:
     """
     Process a task in the Design Draft column.
@@ -102,6 +157,8 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
     # Check if already processed
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["ARCHITECT_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         log.info("Task already processed", task_id=task_id)
@@ -145,13 +202,13 @@ def process_architect_task(kb, task: dict, project_id: int) -> bool:
 
     if result["success"]:
         # Mark as completed (tag + metadata)
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="design")
         log.info(f"Success: DESIGN.md written", task_id=task_id)
         return True
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="design")
-        # Remove started tag to allow retry? No, let human intervene for now.
         log.error(f"Failed: {result['error']}", task_id=task_id)
         return False
 
@@ -168,6 +225,8 @@ def process_pm_task(kb, task: dict, project_id: int) -> bool:
     # Check if already processed
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["PM_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         log.info("PM Task already processed", task_id=task_id)
@@ -206,11 +265,12 @@ def process_pm_task(kb, task: dict, project_id: int) -> bool:
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="planning")
         log.info(f"Success: prd.json written", task_id=task_id)
         return True
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="planning")
         log.error(f"PM Failed: {result['error']}", task_id=task_id)
         kb.create_comment(task_id=task_id, content=f"**PM_AGENT Failed**\n\n{result['error']}")
@@ -274,10 +334,12 @@ def process_spawner_task(kb, task: dict, project_id: int) -> bool:
     
     # 1. Enforce Governance First
     tags = get_task_tags(kb, task['id'])
+    _clear_stale_started(kb, project_id, task['id'], TAGS["SPAWNER_AGENT"])
+    tags = get_task_tags(kb, task['id'])
     if not has_tag(tags, TAGS["GOVERNANCE_AGENT"]["completed"]):
         log.info("Chaining Governance before Spawning...", task_id=task['id'])
         process_governance_task(kb, task, project_id)
-        # Refresh tags not strictly needed if we assume it worked or check result
+        tags = get_task_tags(kb, task['id'])
     
     task_id = task['id']
     title = task['title']
@@ -314,13 +376,12 @@ def process_spawner_task(kb, task: dict, project_id: int) -> bool:
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         log.info(f"Success: Spawned {result.get('count')} child cards", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**SPAWNER**: Automatically created {result.get('count')} child tasks in 'Tests Draft'.")
         return True
     else:
-        # If failed, remove started tag so it retries? Or tag failed?
-        # For now, just log.
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         log.error(f"Spawner Failed: {result['error']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**SPAWNER Failed**\n\n{result['error']}")
         return False
@@ -337,6 +398,8 @@ def process_test_task(kb, task: dict, project_id: int) -> bool:
 
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["TEST_AGENT"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         return False
@@ -363,12 +426,13 @@ def process_test_task(kb, task: dict, project_id: int) -> bool:
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="tests")
         log.info(f"Success: Created {result['test_file']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**TEST_AGENT**: Created test file `{result['test_file']}`.\n\nReady for Human Review.")
         return True
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="tests")
         log.error(f"Test Agent Failed: {result['error']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**TEST_AGENT Failed**\n\n{result['error']}")
@@ -386,6 +450,8 @@ def process_ralph_task(kb, task: dict, project_id: int) -> bool:
     
     tags = get_task_tags(kb, task_id)
     agent_tags = TAGS["RALPH_CODER"]
+    _clear_stale_started(kb, project_id, task_id, agent_tags)
+    tags = get_task_tags(kb, task_id)
 
     if has_tag(tags, agent_tags["completed"]):
         return False
@@ -412,12 +478,13 @@ def process_ralph_task(kb, task: dict, project_id: int) -> bool:
     )
 
     if result["success"]:
-        add_task_tag(kb, project_id, task_id, agent_tags["completed"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="completed", current_phase="coding")
         log.info(f"Success: Green Bar in {result['iterations']} iterations", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**RALPH**: Tests passed in {result['iterations']} iterations. Code committed.")
         return True
     else:
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="coding")
         log.error(f"Ralph Failed: {result['error']}", task_id=task_id)
         kb.create_comment(task_id=task_id, user_id=1, content=f"**RALPH Failed**\n\n{result['error']}")
@@ -482,6 +549,8 @@ def run_once(kb, project_id: int = 1):
             # Check if already processed
             tags = get_task_tags(kb, task['id'])
             agent_tags = TAGS.get(action, {})
+            _clear_stale_started(kb, project_id, task['id'], agent_tags)
+            tags = get_task_tags(kb, task['id'])
 
             if has_tag(tags, agent_tags.get("completed", "")):
                 continue  # Skip completed tasks
@@ -532,6 +601,8 @@ def run_polling(kb, project_id: int = 1, poll_interval: int = 5):
                     # Check if already processed
                     tags = get_task_tags(kb, task['id'])
                     agent_tags = TAGS.get(action, {})
+                    _clear_stale_started(kb, project_id, task['id'], agent_tags)
+                    tags = get_task_tags(kb, task['id'])
 
                     if has_tag(tags, agent_tags.get("completed", "")):
                         continue
