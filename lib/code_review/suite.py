@@ -8,6 +8,7 @@ import subprocess
 from dataclasses import dataclass, asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 
 SEVERITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
@@ -24,6 +25,8 @@ class Finding:
     suggested_fix: str
     category: str
     file_path: str | None = None
+    effort: str = "M"
+    risk_reduction: str = "M"
 
 
 @dataclass
@@ -59,7 +62,17 @@ def _calculate_hash(path: Path) -> str:
 
 
 def _sort_findings(findings: list[Finding]) -> list[Finding]:
-    return sorted(findings, key=lambda item: (SEVERITY_ORDER.get(item.severity, 99), item.id))
+    risk_rank = {"H": 0, "M": 1, "L": 2}
+    effort_rank = {"S": 0, "M": 1, "L": 2}
+    return sorted(
+        findings,
+        key=lambda item: (
+            SEVERITY_ORDER.get(item.severity, 99),
+            risk_rank.get(item.risk_reduction, 1),
+            effort_rank.get(item.effort, 1),
+            item.id,
+        ),
+    )
 
 
 def _pytest_review(workspace: Path) -> ReviewResult:
@@ -78,6 +91,8 @@ def _pytest_review(workspace: Path) -> ReviewResult:
                     suggested_fix="Add and run a targeted test suite before final approval.",
                     category="correctness",
                     file_path="tests/",
+                    effort="M",
+                    risk_reduction="H",
                 )
             ],
         )
@@ -110,6 +125,8 @@ def _pytest_review(workspace: Path) -> ReviewResult:
                 suggested_fix="Fix failing tests before moving forward.",
                 category="correctness",
                 file_path="tests/",
+                effort="M",
+                risk_reduction="H",
             )
         ],
     )
@@ -131,6 +148,8 @@ def _ratchet_integrity_review(workspace: Path) -> ReviewResult:
                     suggested_fix="Run governance lock step before final approval.",
                     category="governance",
                     file_path=".agentleeops/ratchet.json",
+                    effort="S",
+                    risk_reduction="H",
                 )
             ],
         )
@@ -151,6 +170,8 @@ def _ratchet_integrity_review(workspace: Path) -> ReviewResult:
                     suggested_fix="Repair .agentleeops/ratchet.json and re-run governance.",
                     category="governance",
                     file_path=".agentleeops/ratchet.json",
+                    effort="S",
+                    risk_reduction="H",
                 )
             ],
         )
@@ -171,6 +192,8 @@ def _ratchet_integrity_review(workspace: Path) -> ReviewResult:
                     suggested_fix="Restore missing locked artifact and rerun governance lock.",
                     category="governance",
                     file_path=rel_path,
+                    effort="M",
+                    risk_reduction="H",
                 )
             )
             continue
@@ -187,6 +210,8 @@ def _ratchet_integrity_review(workspace: Path) -> ReviewResult:
                     suggested_fix="Move task back to draft lane for explicit re-approval, then relock.",
                     category="governance",
                     file_path=rel_path,
+                    effort="M",
+                    risk_reduction="H",
                 )
             )
 
@@ -226,6 +251,8 @@ def _git_hygiene_review(workspace: Path) -> ReviewResult:
                     details=result.stderr.strip() or "Unknown git error",
                     suggested_fix="Ensure workspace is a valid git repository.",
                     category="operational",
+                    effort="S",
+                    risk_reduction="M",
                 )
             ],
         )
@@ -250,6 +277,8 @@ def _git_hygiene_review(workspace: Path) -> ReviewResult:
                 suggested_fix="Validate whether test changes are intentional and approved.",
                 category="test_integrity",
                 file_path="tests/",
+                effort="S",
+                risk_reduction="H",
             )
         )
 
@@ -261,6 +290,8 @@ def _git_hygiene_review(workspace: Path) -> ReviewResult:
             details="\n".join(lines[:40]),
             suggested_fix="Commit or discard unrelated workspace changes before final approval.",
             category="operational",
+            effort="S",
+            risk_reduction="M",
         )
     )
     return ReviewResult(
@@ -290,6 +321,8 @@ def _artifact_presence_review(workspace: Path) -> ReviewResult:
                 suggested_fix=f"Generate or restore the missing {label} artifact before approval.",
                 category="maintainability",
                 file_path=str(path.relative_to(workspace)),
+                effort="M",
+                risk_reduction="M",
             )
         )
 
@@ -309,7 +342,113 @@ def _artifact_presence_review(workspace: Path) -> ReviewResult:
     )
 
 
-def run_review_suite(workspace: Path) -> ReviewSuiteResult:
+def _parent_child_review(kb_client: Any, task_id: int) -> ReviewResult:
+    """Ensure parent task only passes review when all linked child stories are Done."""
+    try:
+        task = kb_client.get_task(task_id=task_id)
+        if not task:
+            return ReviewResult(
+                review_id="parent_child_review",
+                summary="Task not found for parent/child review.",
+                status="warn",
+                findings=[],
+            )
+        metadata = kb_client.execute("getTaskMetadata", task_id=task_id) or {}
+        # Atomic task: no parent-level child gating required.
+        if metadata.get("atomic_id"):
+            return ReviewResult(
+                review_id="parent_child_review",
+                summary="Atomic task; parent/child gate not required.",
+                status="pass",
+                findings=[],
+            )
+
+        links = kb_client.execute("getAllTaskLinks", task_id=task_id) or []
+        if not links:
+            return ReviewResult(
+                review_id="parent_child_review",
+                summary="No linked child stories found.",
+                status="pass",
+                findings=[],
+            )
+
+        columns = kb_client.get_columns(project_id=int(task["project_id"]))
+        col_by_id = {int(col["id"]): col["title"] for col in columns}
+        child_ids = set()
+        for link in links:
+            linked_id = link.get("task_id")
+            if not linked_id:
+                continue
+            linked_meta = kb_client.execute("getTaskMetadata", task_id=int(linked_id)) or {}
+            if str(linked_meta.get("parent_id", "")) == str(task_id):
+                child_ids.add(int(linked_id))
+
+        if not child_ids:
+            return ReviewResult(
+                review_id="parent_child_review",
+                summary="No child stories linked via parent_id metadata.",
+                status="pass",
+                findings=[],
+            )
+
+        not_done = []
+        for child_id in sorted(child_ids):
+            child_task = kb_client.get_task(task_id=child_id)
+            if not child_task:
+                continue
+            col_title = col_by_id.get(int(child_task["column_id"]), "")
+            if "done" not in col_title.lower():
+                not_done.append((child_id, child_task.get("title", ""), col_title))
+
+        if not_done:
+            details = "\n".join(
+                f"- #{cid} {title} (column: {column})" for cid, title, column in not_done
+            )
+            return ReviewResult(
+                review_id="parent_child_review",
+                summary="Parent task has child stories not in Done.",
+                status="fail",
+                findings=[
+                    Finding(
+                        id="parent-children-not-done",
+                        severity="P0",
+                        title="Parent review blocked by incomplete children",
+                        details=details,
+                        suggested_fix="Complete/move all child stories to Done before parent review approval.",
+                        category="workflow",
+                        effort="M",
+                        risk_reduction="H",
+                    )
+                ],
+            )
+
+        return ReviewResult(
+            review_id="parent_child_review",
+            summary="All linked child stories are in Done.",
+            status="pass",
+            findings=[],
+        )
+    except Exception as exc:
+        return ReviewResult(
+            review_id="parent_child_review",
+            summary="Parent/child review could not be completed.",
+            status="warn",
+            findings=[
+                Finding(
+                    id="parent-child-review-error",
+                    severity="P2",
+                    title="Parent/child review check failed",
+                    details=str(exc),
+                    suggested_fix="Re-run code review after resolving Kanboard connectivity/metadata issues.",
+                    category="workflow",
+                    effort="S",
+                    risk_reduction="M",
+                )
+            ],
+        )
+
+
+def run_review_suite(workspace: Path, kb_client: Any | None = None, task_id: int | None = None) -> ReviewSuiteResult:
     """Run the full code review set and return structured results."""
     reviews = [
         _pytest_review(workspace),
@@ -317,6 +456,8 @@ def run_review_suite(workspace: Path) -> ReviewSuiteResult:
         _git_hygiene_review(workspace),
         _artifact_presence_review(workspace),
     ]
+    if kb_client is not None and task_id is not None:
+        reviews.append(_parent_child_review(kb_client, task_id))
 
     findings: list[Finding] = []
     for review in reviews:
@@ -384,6 +525,8 @@ def to_prioritized_markdown(result: ReviewSuiteResult) -> str:
             location = f" (`{finding.file_path}`)" if finding.file_path else ""
             lines.append(f"{index}. [{finding.severity}] {finding.title}{location}")
             lines.append(f"   - Category: {finding.category}")
+            lines.append(f"   - Effort: {finding.effort}")
+            lines.append(f"   - Risk reduction: {finding.risk_reduction}")
             lines.append(f"   - Details: {finding.details}")
             lines.append(f"   - Suggested fix: {finding.suggested_fix}")
         lines.append("")

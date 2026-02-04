@@ -23,7 +23,7 @@ def run_code_review_agent(task_id: str, title: str, dirname: str, kb_client, pro
     next_steps_path = workspace / next_steps_rel
 
     try:
-        result = run_review_suite(workspace)
+        result = run_review_suite(workspace, kb_client=kb_client, task_id=int(task_id))
         report_json = json.dumps(to_json_dict(result), indent=2)
         next_steps_md = to_prioritized_markdown(result)
     except Exception as exc:
@@ -68,6 +68,7 @@ def run_code_review_agent(task_id: str, title: str, dirname: str, kb_client, pro
     return {
         "success": True,
         "overall_status": result.overall_status,
+        "gate_passed": result.overall_status != "fail",
         "report_path": str(report_path),
         "next_steps_path": str(next_steps_path),
         "finding_count": len(result.findings),

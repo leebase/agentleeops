@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import os
+import re
 import sys
 import time
 
@@ -39,6 +40,7 @@ TRIGGERS = {
     "7. Tests Approved": "GOVERNANCE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
     "9. Code Review": "CODE_REVIEW_AGENT",
+    "10. Code Review": "CODE_REVIEW_AGENT",
 }
 
 # Tags for state tracking
@@ -96,6 +98,31 @@ def connect_kb():
 from lib.logger import get_logger
 
 log = get_logger("ORCHESTRATOR")
+
+
+NORMALIZED_TRIGGER_MAP = {
+    "design draft": "ARCHITECT_AGENT",
+    "design approved": "GOVERNANCE_AGENT",
+    "planning draft": "PM_AGENT",
+    "plan approved": "SPAWNER_AGENT",
+    "tests draft": "TEST_AGENT",
+    "tests approved": "GOVERNANCE_AGENT",
+    "ralph loop": "RALPH_CODER",
+    "code review": "CODE_REVIEW_AGENT",
+}
+
+
+def _normalize_column_title(column_title: str) -> str:
+    """Strip numeric prefixes so lane renumbering does not break routing."""
+    cleaned = re.sub(r"^\s*\d+\.\s*", "", column_title or "")
+    return cleaned.strip().lower()
+
+
+def resolve_trigger_action(column_title: str) -> str | None:
+    """Resolve a trigger action from exact or normalized column title."""
+    if column_title in TRIGGERS:
+        return TRIGGERS[column_title]
+    return NORMALIZED_TRIGGER_MAP.get(_normalize_column_title(column_title))
 
 
 def _replace_task_tags(kb, project_id: int, task_id: int, tags: list[str]) -> None:
@@ -516,6 +543,17 @@ def process_code_review_task(kb, task: dict, project_id: int) -> bool:
     if has_tag(tags, agent_tags["started"]):
         return False
 
+    # Enforce that coding completed before review starts.
+    if not has_tag(tags, TAGS["RALPH_CODER"]["completed"]):
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
+        update_status(kb, task_id, agent_status="failed", current_phase="review")
+        kb.create_comment(
+            task_id=task_id,
+            user_id=1,
+            content="**CODE_REVIEW_AGENT Failed**\n\nMissing `coding-complete` tag. Complete Ralph loop before code review.",
+        )
+        return False
+
     try:
         fields = get_task_fields(kb, task_id)
         dirname = fields["dirname"]
@@ -536,15 +574,24 @@ def process_code_review_task(kb, task: dict, project_id: int) -> bool:
     )
 
     if result["success"]:
-        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
-        update_status(kb, task_id, agent_status="completed", current_phase="review")
-        log.info(
-            "Code review completed",
+        if result.get("gate_passed", False):
+            _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
+            update_status(kb, task_id, agent_status="completed", current_phase="review")
+            log.info(
+                "Code review completed",
+                task_id=task_id,
+                overall_status=result.get("overall_status"),
+                findings=result.get("finding_count"),
+            )
+            return True
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
+        update_status(kb, task_id, agent_status="failed", current_phase="review")
+        kb.create_comment(
             task_id=task_id,
-            overall_status=result.get("overall_status"),
-            findings=result.get("finding_count"),
+            user_id=1,
+            content="**CODE_REVIEW_AGENT Gate Failed**\n\nReview status is FAIL. See `reviews/CODE_REVIEW_NEXT_STEPS.md`.",
         )
-        return True
+        return False
 
     _mark_agent_failed(kb, project_id, task_id, agent_tags)
     update_status(kb, task_id, agent_status="failed", current_phase="review")
@@ -608,8 +655,8 @@ def run_once(kb, project_id: int = 1):
         col_id = task['column_id']
         col_name = col_id_to_name.get(col_id)
 
-        if col_name in TRIGGERS:
-            action = TRIGGERS[col_name]
+        action = resolve_trigger_action(col_name)
+        if action:
 
             # Check if already processed
             tags = get_task_tags(kb, task['id'])
@@ -648,7 +695,7 @@ def run_polling(kb, project_id: int = 1, poll_interval: int = 5):
 
     print("Board Columns:")
     for c in cols:
-        trigger = " <- TRIGGER" if c['title'] in TRIGGERS else ""
+        trigger = " <- TRIGGER" if resolve_trigger_action(c["title"]) else ""
         print(f"  {c['id']}: {c['title']}{trigger}")
     print()
 
@@ -660,8 +707,8 @@ def run_polling(kb, project_id: int = 1, poll_interval: int = 5):
                 col_id = task['column_id']
                 col_name = col_id_to_name.get(col_id)
 
-                if col_name in TRIGGERS:
-                    action = TRIGGERS[col_name]
+                action = resolve_trigger_action(col_name)
+                if action:
 
                     # Check if already processed
                     tags = get_task_tags(kb, task['id'])

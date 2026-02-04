@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import socketserver
 import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -64,6 +65,7 @@ TRIGGERS = {
     "7. Tests Approved": "GOVERNANCE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
     "9. Code Review": "CODE_REVIEW_AGENT",
+    "10. Code Review": "CODE_REVIEW_AGENT",
 }
 
 # Tags for state tracking - matches orchestrator.py
@@ -112,6 +114,17 @@ TAGS = {
 # Events we care about
 TRIGGER_EVENTS = ["task.move.column", "task.create"]
 
+NORMALIZED_TRIGGER_MAP = {
+    "design draft": "ARCHITECT_AGENT",
+    "design approved": "GOVERNANCE_AGENT",
+    "planning draft": "PM_AGENT",
+    "plan approved": "SPAWNER_AGENT",
+    "tests draft": "TEST_AGENT",
+    "tests approved": "GOVERNANCE_AGENT",
+    "ralph loop": "RALPH_CODER",
+    "code review": "CODE_REVIEW_AGENT",
+}
+
 
 def get_kb_client() -> Any:
     """Get Kanboard client."""
@@ -119,6 +132,19 @@ def get_kb_client() -> Any:
         raise RuntimeError("KANBOARD_TOKEN not set")
     token = cast(str, KB_TOKEN)
     return Client(KB_URL, KB_USER, token)
+
+
+def _normalize_column_title(column_title: str) -> str:
+    """Strip numeric prefixes so lane renumbering does not break routing."""
+    cleaned = re.sub(r"^\s*\d+\.\s*", "", column_title or "")
+    return cleaned.strip().lower()
+
+
+def resolve_trigger_action(column_title: str) -> str | None:
+    """Resolve trigger action from exact or normalized column title."""
+    if column_title in TRIGGERS:
+        return TRIGGERS[column_title]
+    return NORMALIZED_TRIGGER_MAP.get(_normalize_column_title(column_title))
 
 
 def _replace_task_tags(kb, project_id: int, task_id: int, tags: list[str]) -> None:
@@ -574,6 +600,14 @@ def process_code_review_task(kb, task_id: int, project_id: int):
         return
     if has_tag(tags, agent_tags["started"]):
         return
+    if not has_tag(tags, TAGS["RALPH_CODER"]["completed"]):
+        _mark_agent_failed(kb, project_id, task_id, agent_tags)
+        update_status(kb, task_id, agent_status="failed", current_phase="review")
+        kb.create_comment(
+            task_id=task_id,
+            content="**CODE_REVIEW_AGENT Failed**\n\nMissing `coding-complete` tag. Complete Ralph loop before code review.",
+        )
+        return
 
     try:
         fields = get_task_fields(kb, task_id)
@@ -594,11 +628,19 @@ def process_code_review_task(kb, task_id: int, project_id: int):
     )
 
     if result["success"]:
-        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
-        update_status(kb, task_id, agent_status="completed", current_phase="review")
-        print(
-            f"  Success: status={result.get('overall_status')} findings={result.get('finding_count')}"
-        )
+        if result.get("gate_passed", False):
+            _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
+            update_status(kb, task_id, agent_status="completed", current_phase="review")
+            print(
+                f"  Success: status={result.get('overall_status')} findings={result.get('finding_count')}"
+            )
+        else:
+            _mark_agent_failed(kb, project_id, task_id, agent_tags)
+            update_status(kb, task_id, agent_status="failed", current_phase="review")
+            kb.create_comment(
+                task_id=task_id,
+                content="**CODE_REVIEW_AGENT Gate Failed**\n\nReview status is FAIL. See `reviews/CODE_REVIEW_NEXT_STEPS.md`.",
+            )
     else:
         _mark_agent_failed(kb, project_id, task_id, agent_tags)
         update_status(kb, task_id, agent_status="failed", current_phase="review")
@@ -714,8 +756,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         print(f"  Task #{task_id} in column: {column_name}")
 
-        if column_name in TRIGGERS:
-            action = TRIGGERS[column_name]
+        action = resolve_trigger_action(column_name)
+        if action:
             process_task(kb, int(task_id), int(project_id), action)
         else:
             print(f"  Column '{column_name}' is not a trigger column")

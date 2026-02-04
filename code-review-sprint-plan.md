@@ -12,7 +12,7 @@ Add a dedicated, expandable code review lane after code generation, producing a 
   - `reviews/CODE_REVIEW_NEXT_STEPS.md`
 - Verify with full test run.
 
-## Sprint 2: Governance and Workflow Hardening (Planned)
+## Sprint 2: Governance and Workflow Hardening (Complete)
 - Define strict lane entry/exit criteria for Code Review lane.
 - Add richer review modules and stronger prioritization rules.
 - Add explicit status semantics for review outcomes (`pass/warn/fail`) at lane level.
