@@ -103,6 +103,7 @@ python orchestrator.py --poll-interval 10
 Both modes support all 6 agents: ARCHITECT, GOVERNANCE, PM, SPAWNER, TEST, and RALPH.
 
 See `product-definition.md` for the full workflow specification.
+See `USER_STORY_WORKFLOW.md` for step-by-step operator instructions.
 
 ## Development
 
