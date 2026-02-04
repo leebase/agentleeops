@@ -1,4 +1,4 @@
-# AgentLeeOps — Product Definition v1.4 (LLM Abstraction Edition)
+# AgentLeeOps — Product Definition v1.5 (Code Review Lane Edition)
 
 ## 1. Executive Summary
 
@@ -11,7 +11,7 @@
 *   **Test Integrity:** Ralph is technically prevented from modifying tests. A "Green Bar" is only valid if the test file hash matches the approved version.
 *   **Artifacts over Chat:** We do not rely on chat logs. We rely on durable files.
 
-## 3. The 10-Step Workflow (State Machine)
+## 3. The 11-Step Workflow (State Machine)
 
 | # | Column | Owner | Artifact | Governance Action |
 |---|---|---|---|---|
@@ -23,8 +23,9 @@
 | **6** | Tests Draft | Test Agent | `tests/*.py` | Agent can overwrite |
 | **7** | **Tests Approved** | Lee | **(Gate)** | **LOCK** `tests/*.py` |
 | **8** | Ralph Loop | Ralph | `src/` | **VERIFY** Test Hash + **BAN** Test Edits |
-| **9** | Final Review | Lee | PR/Diff | Manual Merge |
-| **10** | Done | System | Archived | - |
+| **9** | Code Review | Review Agent | `reviews/CODE_REVIEW_REPORT.json`, `reviews/CODE_REVIEW_NEXT_STEPS.md` | **REVIEW GATE** (fail blocks progression) |
+| **10** | Final Review | Lee | PR/Diff + review artifacts | Manual Merge |
+| **11** | Done | System | Archived | - |
 
 ## 4. Governance & Safety Mechanisms
 

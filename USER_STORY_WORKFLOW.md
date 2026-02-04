@@ -11,7 +11,7 @@ AgentLeeOps is designed for safe, auditable delivery with AI:
 - Approved artifacts are locked (ratchet) so later stages cannot silently rewrite requirements.
 - Progress is resumable and deterministic with tag/state tracking.
 
-## The 10 Lanes and Their Purpose
+## The 11 Lanes and Their Purpose
 
 1. `1. Inbox`
 - Purpose: intake and triage.
@@ -45,11 +45,17 @@ AgentLeeOps is designed for safe, auditable delivery with AI:
 - Purpose: RALPH_CODER implements code to satisfy locked tests.
 - Human action: monitor failures/escalations only; no test rewriting.
 
-9. `9. Final Review`
+9. `9. Code Review`
+- Purpose: CODE_REVIEW_AGENT runs an expandable review set and generates:
+  - `reviews/CODE_REVIEW_REPORT.json`
+  - `reviews/CODE_REVIEW_NEXT_STEPS.md`
+- Human action: consume prioritized next steps and decide what must be fixed before final approval.
+
+10. `10. Final Review`
 - Purpose: human validation of delivered behavior and diffs.
 - Human action: accept/reject implementation quality.
 
-10. `10. Done`
+11. `11. Done`
 - Purpose: workflow complete.
 
 ## Creating a Story Card
@@ -81,8 +87,8 @@ Use this sequence for a parent story:
 2. Wait for design generation, review artifact, then move to `3. Design Approved`.
 3. Move to `4. Planning Draft`, review plan, then move to `5. Plan Approved`.
 4. After spawn, work child stories one at a time:
-- Child: `5 -> 6 -> 7 -> 8 -> 9 -> 10`
-5. After all children are complete, move parent to `8. Ralph Loop` (if using parent batch path), then `9`, then `10`.
+- Child: `5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11`
+5. After all children are complete, move parent to `8. Ralph Loop` (if using parent batch path), then `9`, then `10`, then `11`.
 
 ## Human Interaction and Governance: What Must Stay Human
 
@@ -91,7 +97,7 @@ Human approval is intentionally required at:
 - `3. Design Approved`
 - `5. Plan Approved`
 - `7. Tests Approved`
-- `9. Final Review`
+- `10. Final Review`
 
 Why:
 
@@ -125,4 +131,3 @@ AgentLeeOps uses `started/completed/failed` tags per phase.
 - If a task has both `*-started` and `*-failed` (legacy stale state), system auto-clears `*-started` to unblock retry.
 
 This enables safe, autonomous retries without manual tag cleanup.
-

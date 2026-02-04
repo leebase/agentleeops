@@ -18,7 +18,7 @@ Add a dedicated, expandable code review lane after code generation, producing a 
 - Add explicit status semantics for review outcomes (`pass/warn/fail`) at lane level.
 - Tighten parent/child behavior policy when parent enters review.
 
-## Sprint 3: User Documentation and Operator Playbook (Planned)
+## Sprint 3: User Documentation and Operator Playbook (Complete)
 - Update user-facing docs for the new lane and review artifacts.
 - Add step-by-step operator guidance for reading/applying prioritized next steps.
 - Add examples for expanding the review set over time.

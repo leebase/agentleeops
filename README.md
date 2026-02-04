@@ -4,14 +4,14 @@ AgentLeeOps is an orchestration framework for running high-discipline, multi-age
 
 ## Goals
 
-- Enforce a **10-stage Kanboard workflow** from idea intake through final review.
+- Enforce an **11-stage Kanboard workflow** from idea intake through final review.
 - Preserve **test integrity** by separating authorship of implementation and tests.
 - Prefer **written artifacts over chat** for all durable decisions and designs.
 - Make the system **resumable** so work can stop and restart without losing context.
 
 ## Workflow Overview
 
-AgentLeeOps v1.0 defines a Kanboard pipeline with the following columns (left to right):
+AgentLeeOps defines a Kanboard pipeline with the following columns (left to right):
 
 1. **Inbox** – New work items arrive, minimally triaged.
 2. **Design Draft** – ARCHITECT_AGENT produces `DESIGN.md` for the card.
@@ -21,13 +21,14 @@ AgentLeeOps v1.0 defines a Kanboard pipeline with the following columns (left to
 6. **Tests Draft** – TEST_AGENT generates tests for each story (move stories here one at a time).
 7. **Tests Approved** – Human reviews tests; GOVERNANCE_AGENT locks test files.
 8. **Ralph Loop** – RALPH_CODER implements code to pass tests (move stories here one at a time).
-9. **Final Review** – Human performs final review on code and artifacts.
-10. **Done** – Work is complete and merged.
+9. **Code Review** – CODE_REVIEW_AGENT runs the review suite and publishes prioritized next steps.
+10. **Final Review** – Human performs final review on code, artifacts, and review outputs.
+11. **Done** – Work is complete and merged.
 
 **Human-Controlled Story Flow:**
 - Parent story stays in "Plan Approved" after spawning
 - Child stories are created in "Plan Approved" for editing
-- Move each child story to "Tests Draft" → "Tests Approved" → "Ralph Loop" one at a time
+- Move each child story to "Tests Draft" → "Tests Approved" → "Ralph Loop" → "Code Review" one at a time
 - This prevents explosion of simultaneous LLM calls
 
 Each column has an explicit owner and required artifacts (e.g., `DESIGN.md`, test files, plan documents), as defined in `product-definition.md`.
