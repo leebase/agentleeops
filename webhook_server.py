@@ -61,7 +61,7 @@ TRIGGERS = {
     "4. Planning Draft": "PM_AGENT",
     "5. Plan Approved": "SPAWNER_AGENT",
     "6. Tests Draft": "TEST_AGENT",
-    "7. Tests Approved": "TEST_CODE_AGENT",
+    "7. Tests Approved": "GOVERNANCE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
 }
 
