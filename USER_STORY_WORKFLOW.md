@@ -38,7 +38,7 @@ AgentLeeOps is designed for safe, auditable delivery with AI:
 - Human action: verify test intent before code implementation.
 
 7. `7. Tests Approved`
-- Purpose: GOVERNANCE_AGENT locks tests.
+- Purpose: TEST_CODE_AGENT generates `tests/test_*.py` from approved test plans, then GOVERNANCE_AGENT locks tests.
 - Human action: approval gate for test contract.
 
 8. `8. Ralph Loop`
@@ -111,6 +111,7 @@ Use this sequence for a parent story:
 3. Move to `4. Planning Draft`, review plan, then move to `5. Plan Approved`.
 4. After spawn, work child stories one at a time:
 - Child: `5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11`
+  - Optional: moving the parent to `7. Tests Approved` can batch-generate tests for linked children.
 5. After all children are complete, move parent to `8. Ralph Loop` (if using parent batch path), then `9`, then `10`, then `11`.
 
 ## Human Interaction and Governance: What Must Stay Human

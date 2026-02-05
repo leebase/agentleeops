@@ -20,8 +20,8 @@
 | **3** | **Design Approved** | Lee | **(Gate)** | **LOCK** `DESIGN.md` |
 | **4** | Planning Draft | PM | `prd.json` | Agent can overwrite |
 | **5** | **Plan Approved** | Lee | **(Gate)** | **LOCK** `prd.json` + **SPAWN** Children |
-| **6** | Tests Draft | Test Agent | `tests/*.py` | Agent can overwrite |
-| **7** | **Tests Approved** | Lee | **(Gate)** | **LOCK** `tests/*.py` |
+| **6** | Tests Draft | Test Agent | `tests/TEST_PLAN_*.md` | Agent can overwrite |
+| **7** | **Tests Approved** | Lee | **(Gate)** | **GENERATE** `tests/test_*.py` then **LOCK** `tests/*.py` |
 | **8** | Ralph Loop | Ralph | `src/` | **VERIFY** Test Hash + **BAN** Test Edits |
 | **9** | Code Review | Review Agent | `reviews/CODE_REVIEW_REPORT.json`, `reviews/CODE_REVIEW_NEXT_STEPS.md` | **REVIEW GATE** (fail blocks progression) |
 | **10** | Final Review | Lee | PR/Diff + review artifacts | Manual Merge |

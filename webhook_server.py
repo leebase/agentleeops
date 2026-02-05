@@ -62,7 +62,7 @@ TRIGGERS = {
     "4. Planning Draft": "PM_AGENT",
     "5. Plan Approved": "SPAWNER_AGENT",
     "6. Tests Draft": "TEST_AGENT",
-    "7. Tests Approved": "GOVERNANCE_AGENT",
+    "7. Tests Approved": "TEST_CODE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
     "9. Code Review": "CODE_REVIEW_AGENT",
     "10. Code Review": "CODE_REVIEW_AGENT",
@@ -485,6 +485,36 @@ def process_test_code_task(kb, task_id: int, project_id: int):
     agent_tags = TAGS["TEST_CODE_AGENT"]
     _clear_stale_started(kb, project_id, task_id, agent_tags)
     tags = get_task_tags(kb, task_id)
+
+    # If this is a parent task, fan out test generation to children
+    try:
+        meta = kb.get_task_metadata(task_id=task_id)
+    except Exception:
+        meta = {}
+    if not meta.get("atomic_id"):
+        try:
+            links = kb.execute("getAllTaskLinks", task_id=task_id) or []
+        except Exception:
+            links = []
+        child_ids = [l.get("task_id") for l in links if l.get("task_id")]
+        child_ids = [int(cid) for cid in child_ids]
+        if child_ids:
+            try:
+                cols = kb.get_columns(project_id=project_id)
+                dest_col = next((c for c in cols if "Tests Approved" in c["title"]), None)
+                dest_col_id = int(dest_col["id"]) if dest_col else None
+            except Exception:
+                dest_col_id = None
+
+            print(f"  [Test Code Agent] Parent detected. Generating tests for {len(child_ids)} children...")
+            for child_id in child_ids:
+                try:
+                    if dest_col_id is not None:
+                        kb.execute("updateTask", id=child_id, column_id=dest_col_id)
+                except Exception:
+                    pass
+                process_test_code_task(kb, child_id, project_id)
+            return
 
     if has_tag(tags, agent_tags["completed"]):
         # Still enforce governance even if code gen is done

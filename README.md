@@ -18,8 +18,8 @@ AgentLeeOps defines a Kanboard pipeline with the following columns (left to righ
 3. **Design Approved** – Human reviews design; GOVERNANCE_AGENT locks artifacts.
 4. **Planning Draft** – PM_AGENT generates `prd.json` with atomic stories.
 5. **Plan Approved** – Human reviews plan; SPAWNER_AGENT creates child story cards (remain in this column for human control).
-6. **Tests Draft** – TEST_AGENT generates tests for each story (move stories here one at a time).
-7. **Tests Approved** – Human reviews tests; GOVERNANCE_AGENT locks test files.
+6. **Tests Draft** – TEST_AGENT generates test plans for each story (move stories here one at a time).
+7. **Tests Approved** – Human approves test plans; TEST_CODE_AGENT generates test code and GOVERNANCE_AGENT locks test files.
 8. **Ralph Loop** – RALPH_CODER implements code to pass tests (move stories here one at a time).
 9. **Code Review** – CODE_REVIEW_AGENT runs the review suite and publishes prioritized next steps.
 10. **Final Review** – Human performs final review on code, artifacts, and review outputs.
