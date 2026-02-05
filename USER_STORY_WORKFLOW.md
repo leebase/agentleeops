@@ -58,6 +58,29 @@ AgentLeeOps is designed for safe, auditable delivery with AI:
 11. `11. Done`
 - Purpose: workflow complete.
 
+## Automation Services Must Be Running
+
+Lane automation depends on two background services:
+
+- `webhook_server.py` receives Kanboard webhooks.
+- `orchestrator.py` polls Kanboard and triggers agents.
+
+Start both from the repo root:
+
+```bash
+nohup ./venv/bin/python webhook_server.py --port 5000 > webhook_server.out 2>&1 & echo $! > webhook_server.pid
+nohup ./venv/bin/python orchestrator.py > orchestrator.out 2>&1 & echo $! > orchestrator.pid
+```
+
+Quick health check:
+
+```bash
+tail -n 5 webhook_server.out
+tail -n 5 orchestrator.out
+```
+
+If a lane does not auto-generate after a move, confirm both processes are running and that `KANBOARD_URL`, `KANBOARD_USER`, and `KANBOARD_TOKEN` are set in `.env`.
+
 ## Creating a Story Card
 
 Create a Kanboard card with required fields:
