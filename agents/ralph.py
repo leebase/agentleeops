@@ -10,6 +10,7 @@ Responsibility:
 """
 
 import subprocess
+import sys
 import time
 import re
 from pathlib import Path
@@ -143,7 +144,7 @@ def run_batch_ralph(task_id, children, title, dirname, workspace, kb_client, pro
         print(f"    Batch Loop {attempt}/{MAX_RETRIES}...")
 
         # A. Run ALL Tests
-        cmd = ["python3", "-m", "pytest", "tests/"]
+        cmd = [sys.executable, "-m", "pytest", "tests/"]
         result = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True)
         
         if result.returncode == 0:
@@ -254,7 +255,7 @@ def run_atomic_ralph(task_id, atomic_id, title, dirname, workspace, kb_client):
         print(f"    Loop Iteration {attempt}/{MAX_RETRIES}...")
 
         # A. Run Test
-        cmd = ["python3", "-m", "pytest", str(test_file)]
+        cmd = [sys.executable, "-m", "pytest", str(test_file)]
         result = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True)
         
         if result.returncode == 0:

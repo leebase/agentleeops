@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from dataclasses import dataclass, asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -101,7 +102,7 @@ def _pytest_review(workspace: Path) -> ReviewResult:
     if python_cmd.exists():
         cmd = [str(python_cmd), "-m", "pytest", "tests/", "-q"]
     else:
-        cmd = ["python3", "-m", "pytest", "tests/", "-q"]
+        cmd = [sys.executable, "-m", "pytest", "tests/", "-q"]
 
     result = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True)
     if result.returncode == 0:
