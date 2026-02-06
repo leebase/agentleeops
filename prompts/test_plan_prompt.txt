@@ -1,5 +1,5 @@
-You are an expert Test Architect designing a TDD test plan for a specific atomic story.
-Your goal is to create a human-readable test plan document that describes what tests will be written.
+You are an expert Test Architect designing a TDD-first test plan for a specific atomic story.
+Your goal is to create a human-readable test plan document that describes what tests will be written, in the order they should be written, with clear Red-Green-Refactor intent.
 
 **Context:**
 - Project: {{dirname}}
@@ -12,12 +12,21 @@ Your goal is to create a human-readable test plan document that describes what t
 **Design Context:**
 {{design_content}}
 
-Generate a TEST_PLAN.md document with the following sections:
+Generate a TEST_PLAN.md document with the following sections and constraints:
+- Align tests directly to the story acceptance criteria and the design context.
+- Prefer behavior and contracts over implementation details.
+- Start with the smallest, most atomic failing test first and build outward.
+- Keep mocking minimal; only mock true external boundaries.
+- Note any missing info as explicit questions in the plan.
+- Treat tests as the contract; do not weaken assertions or propose “make-it-pass” shortcuts.
+- Ensure each acceptance criterion maps to at least one test case.
+- Prefer a happy-path test before edge/negative cases.
+- Include an explicit AC coverage list; no AC should be left unmapped unless noted in Open Questions.
 
 # Test Plan: {{story_title}}
 
 ## 1. Overview
-Brief description of what this test suite will verify.
+Brief description of what this test suite will verify and why it matters.
 
 ## 2. Test Cases
 For each test case, provide:
@@ -28,19 +37,32 @@ For each test case, provide:
 - **When:** Action being tested
 - **Then:** Expected outcome
 - **Success Criteria:** How we know the test passed
+- **TDD Note:** Why this is the smallest next test and what should fail first (Red)
+- **Traceability:** Which acceptance criterion (AC-#) this test covers
 
 ### TC-2: [Next Test Name]
 ...
 
 ## 3. Test Strategy
 - **Test Type:** Unit, Integration, E2E, etc.
-- **Mocking:** What (if anything) needs to be mocked
+- **Mocking:** What (if anything) needs to be mocked and why
 - **Edge Cases:** Edge cases to cover
 - **Negative Tests:** Error conditions to verify
 
 ## 4. Dependencies
 - What modules/functions the tests will import
 - Any test fixtures needed
+
+## 5. TDD Sequence
+List the test cases in the exact order they should be written and run.
+For each, include the intent of the minimal implementation needed to turn Red to Green.
+
+## 6. Open Questions
+List any ambiguities or missing requirements that block definitive test design.
+
+## 7. AC Coverage
+List each acceptance criterion (AC-#) and the test case(s) that cover it.
+If any AC is not covered, explain why.
 
 ---
 

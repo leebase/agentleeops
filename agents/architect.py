@@ -154,17 +154,47 @@ def run_architect_agent(
 
     # Step 5: Attach design file to Kanboard task
     if kb_client:
+        log_path = workspace / "agent_debug.log"
         try:
+            with open(log_path, "a") as f:
+                f.write(f"Attempting to attach DESIGN.md to task {task_id}...\n")
+            
             encoded = base64.b64encode(design_content.encode()).decode()
-            kb_client.execute(
-                'createTaskFile',
-                project_id=project_id,
-                task_id=int(task_id),
-                filename=design_filename,
-                blob=encoded
-            )
+            
+            # Try pythonic method first (if available in this version of lib)
+            try:
+                kb_client.create_task_file(
+                    project_id=project_id,
+                    task_id=int(task_id),
+                    filename=design_filename,
+                    blob=encoded
+                )
+                with open(log_path, "a") as f:
+                    f.write("Success: Attached via create_task_file\n")
+            except AttributeError:
+                # Fallback to direct execution
+                kb_client.execute(
+                    'createTaskFile',
+                    project_id=project_id,
+                    task_id=int(task_id),
+                    filename=design_filename,
+                    blob=encoded
+                )
+                with open(log_path, "a") as f:
+                    f.write("Success: Attached via execute('createTaskFile')\n")
+                    
         except Exception as e:
-            print(f"  Note: Could not attach file to Kanboard: {e}")
+            msg = f"Failed to attach file: {e}"
+            print(f"  CRITICAL ERROR: {msg}")
+            # Log to workspace for debugging
+            try:
+                with open(log_path, "a") as f:
+                    f.write(f"ERROR: {msg}\n")
+            except:
+                pass
+            # Don't fail the whole agent, but make it visible
+            post_comment(f"**Warning**: DESIGN.md generated but failed to attach to card.\nError: {e}")
+
 
     # Step 6: Post success comment
     result["success"] = True

@@ -1,201 +1,27 @@
-Good prompt overall — this is already well above average. The fact that you’re seeing “a LOT of step-by-step fixes” is not because the prompt is bad, but because this phase is where models most often over- or under-specify. I’ll review it in three layers: what’s strong, where it leaks, and surgical improvements (no rewrite unless you ask).
-
-I’m grounding this review in the uploaded prompt  ￼.
-
-⸻
-
-What’s Already Strong (keep these)
-
-1. Role framing is correct
-
-“You are an expert Technical Product Manager and System Architect.”
-
-This is the right dual role for planning:
-	•	PM → scope control, sequencing, atomicity
-	•	Architect → feasibility, files, dependencies
-
-Do not change this to “software engineer” — that causes over-eager coding decisions.
-
-⸻
-
-2. Strict JSON schema + “ONLY valid JSON”
-
-This is essential and you’re right to be militant here.
-
-You’ve:
-	•	specified schema
-	•	specified ordering
-	•	specified no prose
-
-That’s why your downstream automation works at all.
-
-⸻
-
-3. Atomic + Testable rules are correctly scoped
-
-“1–2 files”
-“verified with automated tests”
-
-This is a very good implicit constraint. It nudges the model toward:
-	•	infrastructure stories
-	•	adapters
-	•	helpers
-…instead of “do everything” blobs.
-
-⸻
-
-4. “No Hallucinations” rule is necessary
-
-Models will invent nice-to-haves during planning unless explicitly forbidden. You did the right thing.
-
-⸻
-
-Where the Prompt Leaks (why you keep fixing)
-
-1. “Sequential” is underspecified
-
-“Order stories logically”
-
-The model interprets this as conceptual order, not dependency-safe order.
-
-Result:
-	•	tests before interfaces
-	•	adapters before contracts
-	•	or “nice” ordering that breaks TDD flow
-
-Symptom you see: you have to reorder stories manually.
-
-⸻
-
-2. Acceptance criteria are too free-form
-
-You ask for acceptance criteria, but you don’t constrain their shape.
-
-Result:
-	•	vague criteria (“works correctly”)
-	•	criteria that aren’t machine-verifiable
-	•	duplication between description and ACs
-
-This causes friction in your TDD generation phase later.
-
-⸻
-
-3. Dependencies array is underspecified
-
-You include "dependencies": [] but you don’t say:
-	•	internal vs external
-	•	IDs vs names
-	•	allowed values
-
-Result:
-	•	model often leaves it empty even when stories clearly depend on prior ones
-	•	or invents dependency names that don’t match IDs
-
-⸻
-
-4. No explicit “non-code” stories allowance
-
-Right now the model assumes:
-
-every story → code
-
-But in your system, some atomic stories are:
-	•	config
-	•	docs
-	•	wiring
-	•	validation
-	•	migration
-	•	feature flags
-
-Without permission, the model sometimes forces code where it shouldn’t.
-
-⸻
-
-5. No explicit governance awareness
-
-This prompt doesn’t remind the model that:
-	•	tests are ratcheted
-	•	stories will fan out into TDD
-	•	story granularity affects Ralph loops
-
-So it sometimes produces:
-	•	stories that are “too clever”
-	•	or stories that combine test + impl concerns
-
-⸻
-
-Surgical Improvements (minimal, high leverage)
-
-These are small additions, not a rewrite.
-
-A. Tighten “Sequential”
-
-Add one sentence:
-
-Sequential: Stories must be ordered so that each story can be implemented and tested using only artifacts produced by earlier stories.
-
-This alone will cut reordering fixes dramatically.
-
-⸻
-
-B. Shape acceptance criteria
-
-Add this constraint:
-
-Acceptance criteria must be objective, binary, and verifiable by automated tests. Avoid subjective language (“should”, “correctly”, “appropriately”).
-
-This directly improves your test-generation success rate.
-
-⸻
-
-C. Clarify dependencies semantics
-
-Add:
-
-Dependencies must reference earlier story IDs (e.g., "atomic-01"). Leave empty only if the story is fully independent.
-
-This prevents lazy empty arrays.
-
-⸻
-
-D. Allow non-code stories explicitly
-
-Add one line:
-
-Stories may represent configuration, schema, documentation, or wiring work if required by the design.
-
-This prevents code-for-everything behavior.
-
-⸻
-
-E. Remind about AgentLeeOps governance (one line)
-
-Add near the top:
-
-This project follows AgentLeeOps governance: test-first, ratcheted artifacts, and human approval between phases.
-
-This subtly aligns the breakdown with how it will actually be executed.
-
-⸻
-
-Overall Assessment
-
-Score: 8.5 / 10
-	•	Structurally sound
-	•	Automation-friendly
-	•	Correct role framing
-	•	Clear constraints
-
-The friction you’re experiencing is normal at this phase and comes from:
-	•	underspecified sequencing semantics
-	•	acceptance criteria shape
-	•	dependency clarity
-
-All of which are fixable with ~5 lines of extra constraint, not a redesign.
-
-If you want next:
-	•	I can show you one pathological example this prompt produces and how each fix prevents it
-	•	or review how well this prompt pairs with your TDD-generation prompt
-	•	or help you decide whether planning should emit “test-only stories” explicitly
-
-Just say where you want to zoom in.
+You are a strict reviewer of a planning prompt that generates `prd.json`.
+Your job is to evaluate whether the prompt enforces TDD-first sequencing, atomicity, testability, and governance alignment, then suggest minimal edits to fix gaps.
+
+Review the prompt in three parts:
+1. Strengths worth keeping
+2. Leaks that cause downstream rework
+3. Surgical fixes (short additions only; avoid full rewrites unless necessary)
+
+Use this checklist when reviewing:
+- TDD-first sequencing: Stories ordered so tests can be written first and each story depends only on earlier artifacts.
+- Acceptance criteria quality: Objective, binary, and test-verifiable; no vague language.
+- Dependencies semantics: Dependencies reference earlier story `id`s; empty only if truly independent.
+- Scope control: No invented features; stories are atomic (1–2 files).
+- Governance alignment: Test-first, ratcheted artifacts, human gates.
+- Non-code allowances: Allow config/schema/docs/wiring stories where required.
+- Story independence: Minimize cross-story coupling; each story testable with only listed dependencies.
+- AC-to-test mapping: Acceptance criteria are phrased so each can map to a concrete test case.
+- AC format: Given/When/Then or Condition/Expected; no vague language unless measurable.
+- Dependency completeness: No implicit dependencies.
+
+If any checklist item is missing, propose a one-line fix and explain the impact.
+
+Output format:
+- Short title line
+- Bulleted list of Strengths
+- Bulleted list of Leaks
+- Bulleted list of Fixes (each fix is a single sentence)

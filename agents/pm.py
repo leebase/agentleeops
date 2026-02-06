@@ -7,6 +7,8 @@ from lib.workspace import get_workspace_path, safe_write_file
 from lib.syntax_guard import safe_extract_json
 
 PROMPT_TEMPLATE = Path("prompts/planning_prompt.txt")
+MAX_PM_RETRIES = 3
+PM_MAX_TOKENS = 8000
 
 def run_pm_agent(task_id: str, title: str, dirname: str, context_mode: str, acceptance_criteria: str, kb_client, project_id: int):
     """
@@ -40,39 +42,52 @@ def run_pm_agent(task_id: str, title: str, dirname: str, context_mode: str, acce
     except Exception as e:
         return {"success": False, "error": f"Failed to load prompt template: {e}"}
 
-    # 4. Call LLM (New LLM Client)
+    # 4-5. Call LLM + Extract/Validate JSON with retries
     print("  [PM Agent] Generating PRD via LLM...")
-    try:
-        llm = LLMClient.from_config("config/llm.yaml", workspace=workspace)
-        response = llm.complete(
-            role="planner",
-            messages=[{"role": "user", "content": prompt}],
-            json_mode=True
-        )
-        llm_response = response.text
-    except Exception as e:
-        return {"success": False, "error": f"LLM call failed: {e}"}
+    llm = LLMClient.from_config("config/llm.yaml", workspace=workspace)
+    prd_data = None
+    last_error = ""
+    last_response = ""
 
-    # 5. Extract and Validate JSON (Syntax Guard)
-    clean_json, syntax_error = safe_extract_json(llm_response)
-    if syntax_error:
-        # Save raw output for debugging
+    for attempt in range(1, MAX_PM_RETRIES + 1):
+        try:
+            response = llm.complete(
+                role="planner",
+                messages=[{"role": "user", "content": prompt}],
+                json_mode=True,
+                max_tokens=PM_MAX_TOKENS
+            )
+            llm_response = response.text
+            last_response = llm_response
+        except Exception as e:
+            last_error = f"LLM call failed: {e}"
+            continue
+
+        clean_json, syntax_error = safe_extract_json(llm_response)
+        if syntax_error:
+            last_error = f"Invalid JSON on attempt {attempt}: {syntax_error}"
+            continue
+
+        try:
+            parsed = json.loads(clean_json)
+
+            # Basic Schema Validation
+            if "stories" not in parsed or not isinstance(parsed["stories"], list):
+                raise ValueError("JSON missing 'stories' list")
+
+            if not parsed["stories"]:
+                raise ValueError("PRD has no stories")
+
+            prd_data = parsed
+            break
+        except ValueError as e:
+            last_error = f"Invalid PRD Schema on attempt {attempt}: {e}"
+
+    if prd_data is None:
         error_file = workspace / "prd_error.txt"
-        error_file.write_text(llm_response)
-        return {"success": False, "error": f"LLM generated invalid JSON. Saved to {error_file}. {syntax_error}"}
-
-    try:
-        prd_data = json.loads(clean_json)
-
-        # Basic Schema Validation
-        if "stories" not in prd_data or not isinstance(prd_data["stories"], list):
-            raise ValueError("JSON missing 'stories' list")
-
-        if not prd_data["stories"]:
-            raise ValueError("PRD has no stories")
-
-    except ValueError as e:
-        return {"success": False, "error": f"Invalid PRD Schema: {e}"}
+        if last_response:
+            error_file.write_text(last_response)
+        return {"success": False, "error": f"Failed PRD generation after {MAX_PM_RETRIES} attempts. {last_error}. Saved to {error_file}"}
 
     # 6. Save prd.json
     try:
