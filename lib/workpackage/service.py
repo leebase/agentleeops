@@ -31,6 +31,11 @@ def _manifest_path(work_package_dir: Path) -> Path:
     return work_package_dir / "manifest.yaml"
 
 
+def get_manifest_path(work_package_dir: Path) -> Path:
+    """Public accessor for manifest path."""
+    return _manifest_path(work_package_dir)
+
+
 def load_manifest(work_package_dir: Path) -> dict[str, Any]:
     """Load and validate a work package manifest."""
     manifest_file = _manifest_path(work_package_dir)
@@ -42,6 +47,17 @@ def load_manifest(work_package_dir: Path) -> dict[str, Any]:
     if errors:
         raise ManifestValidationError("; ".join(errors))
     return data
+
+
+def save_manifest(work_package_dir: Path, manifest: dict[str, Any]) -> None:
+    """Persist manifest after validating it."""
+    errors = validate_manifest(manifest)
+    if errors:
+        raise ManifestValidationError("; ".join(errors))
+    _manifest_path(work_package_dir).write_text(
+        yaml.safe_dump(manifest, sort_keys=False),
+        encoding="utf-8",
+    )
 
 
 def initialize_work_package(

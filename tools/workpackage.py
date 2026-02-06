@@ -16,6 +16,8 @@ from lib.workpackage import (
     ManifestValidationError,
     initialize_work_package,
     initialize_work_package_from_task,
+    replay_summary,
+    transition_stage,
     load_manifest,
 )
 
@@ -60,6 +62,15 @@ def _parser() -> argparse.ArgumentParser:
     validate_parser = subparsers.add_parser("validate", help="Validate a manifest")
     validate_parser.add_argument("--work-package-dir", required=True)
 
+    transition_parser = subparsers.add_parser("transition", help="Transition to another stage")
+    transition_parser.add_argument("--work-package-dir", required=True)
+    transition_parser.add_argument("--to-stage", required=True)
+    transition_parser.add_argument("--actor", default="system")
+    transition_parser.add_argument("--reason", default="")
+
+    history_parser = subparsers.add_parser("history", help="Print transition replay summary")
+    history_parser.add_argument("--work-package-dir", required=True)
+
     return parser
 
 
@@ -98,6 +109,26 @@ def main() -> int:
             print(
                 f"valid:{manifest['work_package']['id']}:{manifest['work_package']['current_stage']}"
             )
+            return 0
+
+        if args.command == "transition":
+            result = transition_stage(
+                work_package_dir=Path(args.work_package_dir),
+                to_stage=args.to_stage,
+                actor=args.actor,
+                reason=args.reason,
+            )
+            print(
+                "transition:"
+                f"{result.transition_type}:"
+                f"{result.from_stage}->{result.to_stage}:"
+                f"{result.event_file}"
+            )
+            return 0
+
+        if args.command == "history":
+            for line in replay_summary(Path(args.work_package_dir)):
+                print(line)
             return 0
     except ManifestValidationError as err:
         print(f"invalid:{err}", file=sys.stderr)

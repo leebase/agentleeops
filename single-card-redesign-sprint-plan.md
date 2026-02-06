@@ -45,10 +45,10 @@
 
 **Goal:** Make card movement equivalent to stage approval in local state.
 
-1. Define ordered lifecycle states and transition rules. `Status: NOT_STARTED`
-2. Implement transition engine with precondition checks. `Status: NOT_STARTED`
-3. Record immutable approval event per stage transition. `Status: NOT_STARTED`
-4. Implement rollback/reopen semantics (what gets unlocked and what stays historical). `Status: NOT_STARTED`
+1. Define ordered lifecycle states and transition rules. `Status: DONE`
+2. Implement transition engine with precondition checks. `Status: DONE`
+3. Record immutable approval event per stage transition. `Status: DONE`
+4. Implement rollback/reopen semantics (what gets unlocked and what stays historical). `Status: DONE`
 
 **Functional Outcome**
 - Stage transitions can be executed locally with durable approval history.
@@ -59,6 +59,12 @@
 **Checkpoint Artifacts**
 - `work-packages/<id>/approvals/*.json`
 - Lifecycle replay output from event history
+
+**Sprint 2 Validation (2026-02-06)**
+- ✅ `pytest tests/` passed (`334 passed`) with Kanboard env vars
+- ✅ Transition + replay validated via `tools/workpackage.py transition` and `tools/workpackage.py history`
+- ✅ Rollback/reopen verified (approval history persisted, reopened stage state tracked)
+- ✅ Live Kanboard smoke run processed task `#8` (`2. Design Draft`) via `codex_cli` with `DESIGN.md` written in `~/projects/sprint2-lifecycle-smoke`
 
 ## Sprint 3 - Artifact Integrity + Stale Detection
 

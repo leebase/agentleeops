@@ -9,9 +9,17 @@ from .schema import (
 )
 from .service import (
     ARTIFACT_STAGE_DIRS,
+    get_manifest_path,
     initialize_work_package,
     initialize_work_package_from_task,
     load_manifest,
+    save_manifest,
+)
+from .lifecycle import (
+    TransitionResult,
+    list_approval_events,
+    replay_summary,
+    transition_stage,
 )
 
 __all__ = [
@@ -19,9 +27,15 @@ __all__ = [
     "ManifestValidationError",
     "SCHEMA_VERSION",
     "STAGES",
+    "TransitionResult",
     "build_manifest",
+    "get_manifest_path",
     "initialize_work_package",
     "initialize_work_package_from_task",
+    "list_approval_events",
     "load_manifest",
+    "replay_summary",
+    "save_manifest",
+    "transition_stage",
     "validate_manifest",
 ]
