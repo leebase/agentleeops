@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -14,11 +15,16 @@ if str(REPO_ROOT) not in sys.path:
 
 from lib.workpackage import (
     ManifestValidationError,
+    add_external_ref,
+    evaluate_gate,
+    export_external_refs,
+    import_external_refs,
     refresh_dashboard,
     initialize_work_package,
     initialize_work_package_from_task,
     refresh_artifact_registry,
     replay_summary,
+    sync_to_stage,
     transition_stage,
     load_manifest,
 )
@@ -84,6 +90,45 @@ def _parser() -> argparse.ArgumentParser:
         help="Regenerate dashboard JSON and HTML output",
     )
     dashboard_parser.add_argument("--work-package-dir", required=True)
+
+    sync_parser = subparsers.add_parser(
+        "sync-stage",
+        help="Sync local lifecycle to a target stage ID without board dependencies",
+    )
+    sync_parser.add_argument("--work-package-dir", required=True)
+    sync_parser.add_argument("--to-stage", required=True)
+    sync_parser.add_argument("--actor", default="cli")
+    sync_parser.add_argument("--reason", default="")
+
+    gate_parser = subparsers.add_parser(
+        "gate",
+        help="Evaluate artifact gate for an orchestration action",
+    )
+    gate_parser.add_argument("--work-package-dir", required=True)
+    gate_parser.add_argument("--action", required=True)
+
+    map_add_parser = subparsers.add_parser(
+        "map-add",
+        help="Add or update external work item mapping",
+    )
+    map_add_parser.add_argument("--work-package-dir", required=True)
+    map_add_parser.add_argument("--provider", required=True)
+    map_add_parser.add_argument("--external-id", required=True)
+    map_add_parser.add_argument("--url", default=None)
+
+    map_export_parser = subparsers.add_parser(
+        "map-export",
+        help="Export external work item mapping as JSON",
+    )
+    map_export_parser.add_argument("--work-package-dir", required=True)
+    map_export_parser.add_argument("--out", default=None, help="Optional output file path")
+
+    map_import_parser = subparsers.add_parser(
+        "map-import",
+        help="Import external work item mapping from JSON file",
+    )
+    map_import_parser.add_argument("--work-package-dir", required=True)
+    map_import_parser.add_argument("--from-file", required=True)
 
     return parser
 
@@ -160,6 +205,57 @@ def main() -> int:
         if args.command == "refresh-dashboard":
             data_path, html_path = refresh_dashboard(Path(args.work_package_dir))
             print(f"dashboard:{data_path}:{html_path}")
+            return 0
+
+        if args.command == "sync-stage":
+            result = sync_to_stage(
+                work_package_dir=Path(args.work_package_dir),
+                to_stage=args.to_stage,
+                actor=args.actor,
+                reason=args.reason,
+            )
+            print(f"sync:{len(result.event_ids)}:{','.join(result.event_ids)}")
+            return 0
+
+        if args.command == "gate":
+            decision = evaluate_gate(
+                Path(args.work_package_dir),
+                args.action,
+            )
+            status = "allow" if decision.allowed else "block"
+            print(f"gate:{status}:{decision.reason}")
+            return 0
+
+        if args.command == "map-add":
+            item = add_external_ref(
+                work_package_dir=Path(args.work_package_dir),
+                provider=args.provider,
+                external_id=args.external_id,
+                url=args.url,
+            )
+            print(
+                f"map:add:{item['provider']}:{item['external_id']}:"
+                f"{item.get('url', '')}"
+            )
+            return 0
+
+        if args.command == "map-export":
+            payload = export_external_refs(Path(args.work_package_dir))
+            raw = json.dumps(payload, indent=2)
+            if args.out:
+                Path(args.out).write_text(raw + "\n", encoding="utf-8")
+                print(f"map:export:{args.out}")
+            else:
+                print(raw)
+            return 0
+
+        if args.command == "map-import":
+            payload = json.loads(Path(args.from_file).read_text(encoding="utf-8"))
+            applied = import_external_refs(
+                work_package_dir=Path(args.work_package_dir),
+                payload=payload,
+            )
+            print(f"map:import:{applied}")
             return 0
     except ManifestValidationError as err:
         print(f"invalid:{err}", file=sys.stderr)

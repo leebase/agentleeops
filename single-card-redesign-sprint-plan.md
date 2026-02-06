@@ -1,6 +1,6 @@
 # Single Card Redesign - Sprint Plan
 
-**Status:** IN PROGRESS (Sprints 1-5 complete)
+**Status:** IN PROGRESS (Sprints 1-6 complete)
 
 ## Status Legend
 
@@ -146,10 +146,10 @@
 
 **Goal:** Make the model portable beyond Kanban.
 
-1. Add CLI commands for init, transition, validate, and dashboard refresh. `Status: NOT_STARTED`
-2. Ensure all orchestration logic is callable without Kanban dependencies. `Status: NOT_STARTED`
-3. Define adapter contract for future Jira/ADO integrations. `Status: NOT_STARTED`
-4. Add import/export mapping for external work item identifiers. `Status: NOT_STARTED`
+1. Add CLI commands for init, transition, validate, and dashboard refresh. `Status: DONE`
+2. Ensure all orchestration logic is callable without Kanban dependencies. `Status: DONE`
+3. Define adapter contract for future Jira/ADO integrations. `Status: DONE`
+4. Add import/export mapping for external work item identifiers. `Status: DONE`
 
 **Functional Outcome**
 - Same lifecycle can run locally through CLI with no board required.
@@ -160,6 +160,12 @@
 **Checkpoint Artifacts**
 - CLI command usage docs
 - Adapter contract documentation
+
+**Sprint 6 Validation (2026-02-06)**
+- ✅ `pytest tests/` passed (`349 passed`) with Kanboard env vars
+- ✅ CLI-only lifecycle flow validated via `sync-stage`, `gate`, `refresh-artifacts`, and `refresh-dashboard`
+- ✅ Added external mapping commands (`map-add`, `map-export`, `map-import`) with passing import/export tests
+- ✅ Added external adapter contract for Jira/ADO readiness in `lib/workitem/adapter_contract.py`
 
 ## Sprint 7 - Migration, Hardening, and Rollout
 

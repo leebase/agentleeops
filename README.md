@@ -114,6 +114,12 @@ Set `AGENTLEEOPS_SINGLE_CARD_MODE=1` to enable the single-card lifecycle adapter
 - Spawner fan-out is disabled; the same card is moved through later stages.
 - Agent execution is gated by local artifact freshness (for example, stale design blocks planning).
 
+### CLI-First Lifecycle
+
+You can run the single-card lifecycle without Kanboard using `tools/workpackage.py`.
+See `WORKPACKAGE_CLI.md` for command examples (`sync-stage`, `gate`, dashboard refresh, mapping import/export).
+See `EXTERNAL_ADAPTER_CONTRACT.md` for the Jira/ADO adapter contract.
+
 ## Development
 
 - Dependencies are listed in `requirements.txt`.
