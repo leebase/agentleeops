@@ -11,6 +11,7 @@ import uuid
 
 from .schema import STAGES, ManifestValidationError
 from .artifacts import refresh_artifact_registry
+from .dashboard import refresh_dashboard
 from .service import load_manifest, save_manifest
 
 APPROVAL_STAGE_PATH_KEY = {
@@ -213,11 +214,13 @@ def transition_stage(
         approved_stage=from_stage if transition_type == "advance" else None,
         approval_event_id=event_id if transition_type == "advance" else None,
         persist=False,
+        refresh_dashboard_output=False,
         reason=f"transition:{transition_type}",
     )
 
     event_file.write_text(json.dumps(event, indent=2), encoding="utf-8")
     save_manifest(work_package_dir, manifest)
+    refresh_dashboard(work_package_dir, manifest=manifest)
 
     return TransitionResult(
         from_stage=from_stage,

@@ -99,6 +99,7 @@ def refresh_artifact_registry(
     approved_stage: str | None = None,
     approval_event_id: str | None = None,
     persist: bool = True,
+    refresh_dashboard_output: bool = True,
     reason: str = "manual",
 ) -> dict[str, Any]:
     """
@@ -174,6 +175,10 @@ def refresh_artifact_registry(
 
     if persist:
         save_manifest(work_package_dir, current_manifest)
+        if refresh_dashboard_output:
+            from .dashboard import refresh_dashboard
+
+            refresh_dashboard(work_package_dir, manifest=current_manifest)
     return artifacts_state
 
 

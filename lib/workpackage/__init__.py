@@ -16,6 +16,11 @@ from .service import (
     save_manifest,
 )
 from .artifacts import refresh_artifact_registry
+from .dashboard import (
+    build_dashboard_data,
+    refresh_dashboard,
+    render_dashboard_html,
+)
 from .lifecycle import (
     TransitionResult,
     list_approval_events,
@@ -30,13 +35,16 @@ __all__ = [
     "STAGES",
     "TransitionResult",
     "build_manifest",
+    "build_dashboard_data",
     "get_manifest_path",
     "initialize_work_package",
     "initialize_work_package_from_task",
     "list_approval_events",
     "load_manifest",
     "refresh_artifact_registry",
+    "refresh_dashboard",
     "replay_summary",
+    "render_dashboard_html",
     "save_manifest",
     "transition_stage",
     "validate_manifest",

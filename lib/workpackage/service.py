@@ -12,19 +12,38 @@ from .schema import build_manifest, validate_manifest, ManifestValidationError
 ARTIFACT_STAGE_DIRS = ("design", "planning", "tests", "implementation")
 
 
-def _ensure_layout(work_package_dir: Path) -> None:
+def _resolve_dashboard_paths(manifest: dict[str, Any] | None) -> tuple[Path, Path]:
+    paths = manifest.get("paths", {}) if isinstance(manifest, dict) else {}
+
+    dashboard_html_rel = str(paths.get("dashboard", "")).strip() or "dashboard/dashboard.html"
+    dashboard_data_rel = str(paths.get("dashboard_data", "")).strip()
+    if not dashboard_data_rel:
+        dashboard_dir = Path(dashboard_html_rel).parent
+        dashboard_data_rel = str(dashboard_dir / "dashboard.json")
+
+    return Path(dashboard_html_rel), Path(dashboard_data_rel)
+
+
+def _ensure_layout(work_package_dir: Path, manifest: dict[str, Any] | None = None) -> None:
     artifacts_dir = work_package_dir / "artifacts"
     for stage_dir in ARTIFACT_STAGE_DIRS:
         (artifacts_dir / stage_dir).mkdir(parents=True, exist_ok=True)
 
     (work_package_dir / "approvals").mkdir(parents=True, exist_ok=True)
 
-    dashboard_path = artifacts_dir / "dashboard.html"
+    dashboard_html_rel, dashboard_data_rel = _resolve_dashboard_paths(manifest)
+    dashboard_path = work_package_dir / dashboard_html_rel
+    dashboard_path.parent.mkdir(parents=True, exist_ok=True)
     if not dashboard_path.exists():
         dashboard_path.write_text(
             "<!doctype html><html><body><h1>Dashboard pending generation</h1></body></html>\n",
             encoding="utf-8",
         )
+
+    dashboard_data_path = work_package_dir / dashboard_data_rel
+    dashboard_data_path.parent.mkdir(parents=True, exist_ok=True)
+    if not dashboard_data_path.exists():
+        dashboard_data_path.write_text("{}\n", encoding="utf-8")
 
 
 def _manifest_path(work_package_dir: Path) -> Path:
@@ -81,8 +100,8 @@ def initialize_work_package(
 
     manifest_file = _manifest_path(work_package_dir)
     if manifest_file.exists():
-        load_manifest(work_package_dir)
-        _ensure_layout(work_package_dir)
+        manifest = load_manifest(work_package_dir)
+        _ensure_layout(work_package_dir, manifest=manifest)
         return work_package_dir
 
     manifest = build_manifest(
@@ -98,7 +117,7 @@ def initialize_work_package(
         raise ManifestValidationError("; ".join(errors))
 
     manifest_file.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
-    _ensure_layout(work_package_dir)
+    _ensure_layout(work_package_dir, manifest=manifest)
     return work_package_dir
 
 

@@ -1,6 +1,6 @@
 # Single Card Redesign - Sprint Plan
 
-**Status:** IN PROGRESS (Sprints 1-3 complete)
+**Status:** IN PROGRESS (Sprints 1-4 complete)
 
 ## Status Legend
 
@@ -96,10 +96,10 @@
 
 **Goal:** Provide local visibility into lifecycle and artifact health.
 
-1. Generate canonical dashboard data file from manifest + approvals + artifact states. `Status: NOT_STARTED`
-2. Render static `dashboard.html` from dashboard data. `Status: NOT_STARTED`
-3. Add links to stage artifacts and approval history in dashboard output. `Status: NOT_STARTED`
-4. Trigger dashboard refresh on transition and artifact update events. `Status: NOT_STARTED`
+1. Generate canonical dashboard data file from manifest + approvals + artifact states. `Status: DONE`
+2. Render static `dashboard.html` from dashboard data. `Status: DONE`
+3. Add links to stage artifacts and approval history in dashboard output. `Status: DONE`
+4. Trigger dashboard refresh on transition and artifact update events. `Status: DONE`
 
 **Functional Outcome**
 - A local HTML file shows stage status, approvals, freshness, and artifact links.
@@ -110,6 +110,12 @@
 **Checkpoint Artifacts**
 - `work-packages/<id>/dashboard/dashboard.json`
 - `work-packages/<id>/dashboard/dashboard.html`
+
+**Sprint 4 Validation (2026-02-06)**
+- ✅ `pytest tests/` passed (`341 passed`) with Kanboard env vars
+- ✅ `tools/workpackage.py refresh-dashboard` generates both `dashboard/dashboard.json` and `dashboard/dashboard.html`
+- ✅ Lifecycle transitions auto-refresh dashboard with current stage + approval history
+- ✅ Artifact refresh updates dashboard freshness state (`approved` -> `stale`) deterministically
 
 ## Sprint 5 - Single-Card Orchestration Integration
 

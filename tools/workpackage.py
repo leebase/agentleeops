@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from lib.workpackage import (
     ManifestValidationError,
+    refresh_dashboard,
     initialize_work_package,
     initialize_work_package_from_task,
     refresh_artifact_registry,
@@ -77,6 +78,12 @@ def _parser() -> argparse.ArgumentParser:
         help="Recompute artifact hashes and freshness state",
     )
     refresh_parser.add_argument("--work-package-dir", required=True)
+
+    dashboard_parser = subparsers.add_parser(
+        "refresh-dashboard",
+        help="Regenerate dashboard JSON and HTML output",
+    )
+    dashboard_parser.add_argument("--work-package-dir", required=True)
 
     return parser
 
@@ -148,6 +155,11 @@ def main() -> int:
                 f"stale={counts.get('stale', 0)}:"
                 f"superseded={counts.get('superseded', 0)}"
             )
+            return 0
+
+        if args.command == "refresh-dashboard":
+            data_path, html_path = refresh_dashboard(Path(args.work_package_dir))
+            print(f"dashboard:{data_path}:{html_path}")
             return 0
     except ManifestValidationError as err:
         print(f"invalid:{err}", file=sys.stderr)
