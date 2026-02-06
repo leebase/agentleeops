@@ -8,6 +8,16 @@ llm:
       api_key_env: "OPENROUTER_API_KEY"
       timeout_s: 120
 
+    codex_cli:
+      type: codex_cli
+      command: "codex"
+      subcommand: "exec"
+      model_flag: "--model"
+      output_flag: "--output-last-message"
+      timeout_s: 300
+      args:
+        - "--skip-git-repo-check"
+
     opencode_cli:
       type: opencode_cli
       command: "opencode"
@@ -24,26 +34,26 @@ llm:
 
   roles:
     planner:
-      provider: openrouter
-      model: "anthropic/claude-opus-4.5" # 200 OK
+      provider: codex_cli
+      model: "gpt-5"
       temperature: 0.2
       max_tokens: 4000
       json_mode: false
 
     coder:
-      provider: openrouter
-      model: "google/gemini-3-flash-preview"
+      provider: codex_cli
+      model: "gpt-5"
       temperature: 0.1
       max_tokens: 8000
 
     reviewer:
-      provider: openrouter
-      model: "anthropic/claude-opus-4.5"
+      provider: codex_cli
+      model: "gpt-5"
       temperature: 0.2
       max_tokens: 2000
 
     summarizer:
-      provider: openrouter
-      model: "anthropic/claude-opus-4.5"
+      provider: codex_cli
+      model: "gpt-5"
       temperature: 0.3
       max_tokens: 2000

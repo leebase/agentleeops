@@ -40,7 +40,6 @@ TRIGGERS = {
     "7. Tests Approved": "TEST_CODE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
     "9. Code Review": "CODE_REVIEW_AGENT",
-    "10. Code Review": "CODE_REVIEW_AGENT",
 }
 
 # Tags for state tracking

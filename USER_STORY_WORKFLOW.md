@@ -81,6 +81,37 @@ tail -n 5 orchestrator.out
 
 If a lane does not auto-generate after a move, confirm both processes are running and that `KANBOARD_URL`, `KANBOARD_USER`, and `KANBOARD_TOKEN` are set in `.env`.
 
+## Local Kanboard Setup (MetaMagik + Swimlanes)
+
+For local macOS setup, avoid port conflicts with system services by running Kanboard on `18080` and webhook on `5050`.
+
+1. Start Kanboard:
+```bash
+docker run -d --name kanboard-local -p 18080:80 kanboard/kanboard:latest
+```
+2. Install MetaMagik in the running container:
+```bash
+docker exec kanboard-local sh -lc 'apk add --no-cache git && cd /var/www/app/plugins && git clone --depth 1 https://github.com/creecros/MetaMagik.git'
+```
+3. Create/use local Python env:
+```bash
+python3.11 -m venv .macenv
+source .macenv/bin/activate
+pip install -r requirements.txt
+```
+4. Configure board columns, swimlanes, and tags:
+```bash
+KANBOARD_URL=http://127.0.0.1:18080/jsonrpc.php \
+KANBOARD_USER=admin \
+KANBOARD_TOKEN=admin \
+python setup-board.py
+```
+
+`setup-board.py` now provisions:
+- all 11 workflow columns
+- swimlanes: `Parent Stories`, `Atomic Stories`
+- standard tags
+
 ## Creating a Story Card
 
 Create a Kanboard card with required fields:

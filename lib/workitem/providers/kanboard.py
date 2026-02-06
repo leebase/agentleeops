@@ -18,7 +18,7 @@ from lib.workitem.types import (
 from lib.workitem.config import get_provider_config, load_provider_config
 
 
-# Default column-to-state mapping (matches AgentLeeOps 10-column workflow)
+# Default column-to-state mapping (matches AgentLeeOps 11-column workflow)
 DEFAULT_COLUMN_MAP = {
     "1. Inbox": WorkItemState.INBOX,
     "2. Design Draft": WorkItemState.DESIGN_DRAFT,
@@ -28,8 +28,10 @@ DEFAULT_COLUMN_MAP = {
     "6. Tests Draft": WorkItemState.TESTS_DRAFT,
     "7. Tests Approved": WorkItemState.TESTS_APPROVED,
     "8. Ralph Loop": WorkItemState.IMPLEMENTATION,
-    "9. Final Review": WorkItemState.FINAL_REVIEW,
-    "10. Done": WorkItemState.DONE,
+    # WorkItemState has no dedicated code review value yet; map to final review.
+    "9. Code Review": WorkItemState.FINAL_REVIEW,
+    "10. Final Review": WorkItemState.FINAL_REVIEW,
+    "11. Done": WorkItemState.DONE,
 }
 
 
@@ -68,6 +70,7 @@ class KanboardWorkItemProvider:
         
         # Cache for column lookups
         self._column_cache: dict[int, dict] = {}
+        self._api_user_id: int | None = None
     
     def _build_column_map(self, config_mapping: dict) -> dict[str, WorkItemState]:
         """Build column-to-state map from config or defaults."""
@@ -263,11 +266,17 @@ class KanboardWorkItemProvider:
         """
         try:
             task_id = int(identity.external_id)
-            # Kanboard API: create_comment(task_id, user_id, content)
-            # user_id=0 uses the API user
+
+            if self._api_user_id is None:
+                me = self.client.get_me()
+                if isinstance(me, dict) and me.get("id"):
+                    self._api_user_id = int(me["id"])
+                else:
+                    self._api_user_id = 1
+
             result = self.client.create_comment(
                 task_id=task_id,
-                user_id=0,
+                user_id=self._api_user_id,
                 content=content,
             )
             return bool(result)

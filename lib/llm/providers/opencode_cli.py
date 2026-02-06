@@ -5,6 +5,7 @@ import os
 import subprocess
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Optional
 
 from ..response import LLMRequest, LLMResponse
@@ -24,6 +25,13 @@ class OpenCodeCLIProvider:
         Raises:
             ValueError: If configuration is invalid
         """
+        # Validate optional working directory first.
+        cwd = cfg.get("cwd")
+        if cwd:
+            cwd_path = Path(cwd).expanduser()
+            if not cwd_path.exists() or not cwd_path.is_dir():
+                raise ValueError(f"Invalid cwd: {cwd}")
+
         # Get command (from config or env var)
         command = cfg.get("command") or os.getenv("OPENCODE_CMD", "opencode")
 
@@ -83,6 +91,9 @@ class OpenCodeCLIProvider:
         subcommand = config.get("subcommand") or os.getenv("OPENCODE_SUBCOMMAND", "run")
         model_flag = config.get("model_flag") or os.getenv("OPENCODE_MODEL_FLAG", "--model")
         timeout_s = config.get("timeout_s", 300)
+        cwd = config.get("cwd")
+        if cwd:
+            cwd = str(Path(cwd).expanduser().resolve())
 
         # Build prompt from messages
         # For CLI, we concatenate all messages into a single prompt
@@ -120,6 +131,7 @@ class OpenCodeCLIProvider:
                 capture_output=True,
                 text=True,
                 timeout=timeout_s,
+                cwd=cwd,
             )
             elapsed_ms = int((time.time() - start_time) * 1000)
 
@@ -162,7 +174,7 @@ class OpenCodeCLIProvider:
             raw={"stdout": result.stdout, "stderr": result.stderr},
             request_id=request_id,
             elapsed_ms=elapsed_ms,
-            metadata={"command": " ".join(cmd)},
+            metadata={"command": " ".join(cmd), "cwd": cwd},
             json_repair_applied=json_repair_applied,
             json_repair_method=json_repair_method,
         )

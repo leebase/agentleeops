@@ -5,6 +5,7 @@ import os
 import subprocess
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from ..response import LLMRequest, LLMResponse
@@ -24,6 +25,13 @@ class GeminiCLIProvider:
         Raises:
             ValueError: If configuration is invalid
         """
+        # Validate optional working directory first.
+        cwd = cfg.get("cwd")
+        if cwd:
+            cwd_path = Path(cwd).expanduser()
+            if not cwd_path.exists() or not cwd_path.is_dir():
+                raise ValueError(f"Invalid cwd: {cwd}")
+
         # Get command (from config or env var)
         command = cfg.get("command") or os.getenv("GEMINI_CMD", "gemini")
 
@@ -77,6 +85,9 @@ class GeminiCLIProvider:
         command = config.get("command") or os.getenv("GEMINI_CMD", "gemini")
         model = config.get("model")  # Optional for Gemini CLI
         timeout_s = config.get("timeout_s", 120)
+        cwd = config.get("cwd")
+        if cwd:
+            cwd = str(Path(cwd).expanduser().resolve())
 
         # Build prompt from messages
         prompt = self._build_prompt(request.messages)
@@ -114,6 +125,7 @@ class GeminiCLIProvider:
                 capture_output=True,
                 text=True,
                 timeout=timeout_s,
+                cwd=cwd,
             )
             elapsed_ms = int((time.time() - start_time) * 1000)
 
@@ -159,7 +171,7 @@ class GeminiCLIProvider:
             raw={"stdout": result.stdout, "stderr": result.stderr},
             request_id=request_id,
             elapsed_ms=elapsed_ms,
-            metadata={"command": " ".join(cmd)},
+            metadata={"command": " ".join(cmd), "cwd": cwd},
             json_repair_applied=json_repair_applied,
             json_repair_method=json_repair_method,
         )

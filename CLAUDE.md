@@ -16,13 +16,14 @@ cp .env.example .env  # Edit with your KANBOARD_TOKEN
 ```
 
 **Prerequisites:**
-- Kanboard running on Docker port 88 with MetaMagik plugin
+- Kanboard running with MetaMagik plugin
+- Recommended local macOS ports to avoid conflicts: Kanboard `18080`, webhook `5050`
 - LLM provider configured (OpenRouter API key OR OpenCode CLI installed)
 
 ## Running the System
 
 ```bash
-# One-time board setup (creates 10-column workflow)
+# One-time board setup (creates 11-column workflow)
 python setup-board.py
 
 # Webhook mode (recommended)
@@ -33,6 +34,20 @@ python orchestrator.py --poll-interval 10
 
 # Or single-run mode
 python orchestrator.py --once
+```
+
+**Local macOS quick setup (MetaMagik):**
+```bash
+python3.11 -m venv .macenv
+source .macenv/bin/activate
+pip install -r requirements.txt
+
+docker run -d --name kanboard-local -p 18080:80 kanboard/kanboard:latest
+docker exec kanboard-local sh -lc 'apk add --no-cache git && cd /var/www/app/plugins && git clone --depth 1 https://github.com/creecros/MetaMagik.git'
+
+KANBOARD_URL=http://127.0.0.1:18080/jsonrpc.php KANBOARD_USER=admin KANBOARD_TOKEN=admin python setup-board.py
+KANBOARD_URL=http://127.0.0.1:18080/jsonrpc.php KANBOARD_USER=admin KANBOARD_TOKEN=admin python -u webhook_server.py --port 5050
+KANBOARD_URL=http://127.0.0.1:18080/jsonrpc.php KANBOARD_USER=admin KANBOARD_TOKEN=admin python orchestrator.py --poll-interval 5
 ```
 
 ## Testing

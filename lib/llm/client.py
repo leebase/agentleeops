@@ -151,6 +151,8 @@ class LLMClient:
             # Merge provider config with role model
             provider_config = provider_cfg.config.copy()
             provider_config["model"] = role_cfg.model
+            if self.workspace and "cwd" not in provider_config:
+                provider_config["cwd"] = str(Path(self.workspace).expanduser().resolve())
 
             response = provider.complete(request, provider_config)
 

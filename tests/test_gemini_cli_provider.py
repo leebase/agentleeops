@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch, Mock
 import pytest
 
@@ -337,3 +338,47 @@ class TestGeminiCLIProvider:
             # Check metadata
             assert "command" in response.metadata
             assert "gemini" in response.metadata["command"]
+
+    def test_complete_uses_explicit_cwd(self):
+        """Pass cwd through to subprocess.run when configured."""
+        provider = GeminiCLIProvider()
+        request = LLMRequest(
+            role="tester",
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+        config = {
+            "command": "gemini",
+            "timeout_s": 120,
+            "cwd": "/tmp",
+        }
+
+        gemini_output = json.dumps({
+            "session_id": "test",
+            "response": "Hi",
+            "stats": {}
+        }) + "\nLoaded cached credentials.\n"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=0,
+                stdout=gemini_output,
+                stderr="",
+            )
+
+            response = provider.complete(request, config)
+
+            assert Path(mock_run.call_args.kwargs["cwd"]) == Path("/tmp").resolve()
+            assert Path(response.metadata["cwd"]) == Path("/tmp").resolve()
+
+    def test_validate_config_invalid_cwd(self):
+        """Raise error for invalid cwd path."""
+        provider = GeminiCLIProvider()
+        config = {
+            "command": "gemini",
+            "timeout_s": 120,
+            "cwd": "/definitely/not/a/real/path",
+        }
+
+        with pytest.raises(ValueError) as exc_info:
+            provider.validate_config(config)
+        assert "Invalid cwd" in str(exc_info.value)

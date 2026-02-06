@@ -5,9 +5,10 @@ AgentLeeOps Board Configurator
 Run this ONCE to configure your Kanboard project to the AgentLeeOps spec.
 It will:
 1. Create the Project (if missing).
-2. Wipe default columns and creating the 10 PRD columns.
-3. Set WIP limits (1 for Agent columns, Unlimited for Human columns).
-4. Create the standard Tags.
+2. Wipe default columns and create the 11 workflow columns.
+3. Create standard swimlanes.
+4. Set WIP limits (1 for Agent columns, Unlimited for Human columns).
+5. Create the standard Tags.
 """
 
 import os
@@ -35,13 +36,20 @@ COLUMNS = [
     ("1. Inbox", 0),
     ("2. Design Draft", 1),        # Agent focused on one design
     ("3. Design Approved", 0),
-    ("4. Planning Draft", 1),      # Agent breaking down one plan (NEW: Before Tests)
-    ("5. Plan Approved", 0),       # Fan-Out Point
+    ("4. Planning Draft", 1),      # Agent breaking down one plan
+    ("5. Plan Approved", 0),       # Fan-Out point
     ("6. Tests Draft", 1),         # Agent writing tests for Atomic Story
     ("7. Tests Approved", 0),
     ("8. Ralph Loop", 1),          # The Grind: Focus on ONE thing
-    ("9. Final Review", 0),
-    ("10. Done", 0)
+    ("9. Code Review", 1),         # Review agent
+    ("10. Final Review", 0),
+    ("11. Done", 0)
+]
+
+# Swimlanes used for story organization
+SWIMLANES = [
+    "Parent Stories",
+    "Atomic Stories",
 ]
 
 # Standard Tags
@@ -125,10 +133,53 @@ def configure_tags(kb, project_id):
         else:
             print(f"      . Tag '{tag}' exists.")
 
+
+def configure_swimlanes(kb, project_id):
+    print("🏊 Configuring Swimlanes...")
+
+    try:
+        current = kb.execute("getAllSwimlanes", project_id=int(project_id))
+    except Exception as e:
+        print(f"   -> Could not load swimlanes: {e}")
+        return
+
+    existing_names = {lane["name"] for lane in current}
+
+    for idx, lane_name in enumerate(SWIMLANES, start=2):
+        if lane_name in existing_names:
+            print(f"      . Swimlane '{lane_name}' exists.")
+            continue
+
+        try:
+            kb.execute(
+                "addSwimlane",
+                project_id=int(project_id),
+                name=lane_name,
+                position=idx,
+            )
+            print(f"      + Created Swimlane: {lane_name}")
+        except Exception as e:
+            print(f"      ! Failed to create swimlane '{lane_name}': {e}")
+
+    try:
+        refreshed = kb.execute("getAllSwimlanes", project_id=int(project_id))
+        parent_lane = next((lane for lane in refreshed if lane["name"] == "Parent Stories"), None)
+        if parent_lane:
+            kb.execute(
+                "setDefaultSwimlane",
+                project_id=int(project_id),
+                swimlane_id=int(parent_lane["id"]),
+            )
+            print("      . Default swimlane set to 'Parent Stories'.")
+    except Exception:
+        # Optional enhancement; continue even if API support differs by version.
+        pass
+
 if __name__ == "__main__":
     kb = connect()
     p_id = setup_project(kb)
     configure_columns(kb, p_id)
+    configure_swimlanes(kb, p_id)
     configure_tags(kb, p_id)
 
     print("\n✅ Board Setup Complete. You are ready for AgentLeeOps.")

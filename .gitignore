@@ -11,6 +11,9 @@ dist/
 
 # Virtual environments
 .venv/
+.macenv/
+.venv_local/
+.macenv_py39_backup/
 venv/
 ENV/
 

@@ -65,7 +65,6 @@ TRIGGERS = {
     "7. Tests Approved": "TEST_CODE_AGENT",
     "8. Ralph Loop": "RALPH_CODER",
     "9. Code Review": "CODE_REVIEW_AGENT",
-    "10. Code Review": "CODE_REVIEW_AGENT",
 }
 
 # Tags for state tracking - matches orchestrator.py
@@ -120,7 +119,7 @@ NORMALIZED_TRIGGER_MAP = {
     "planning draft": "PM_AGENT",
     "plan approved": "SPAWNER_AGENT",
     "tests draft": "TEST_AGENT",
-    "tests approved": "GOVERNANCE_AGENT",
+    "tests approved": "TEST_CODE_AGENT",
     "ralph loop": "RALPH_CODER",
     "code review": "CODE_REVIEW_AGENT",
 }
