@@ -73,10 +73,13 @@ def save_manifest(work_package_dir: Path, manifest: dict[str, Any]) -> None:
     errors = validate_manifest(manifest)
     if errors:
         raise ManifestValidationError("; ".join(errors))
-    _manifest_path(work_package_dir).write_text(
+    manifest_path = _manifest_path(work_package_dir)
+    tmp_path = manifest_path.with_suffix(".yaml.tmp")
+    tmp_path.write_text(
         yaml.safe_dump(manifest, sort_keys=False),
         encoding="utf-8",
     )
+    tmp_path.replace(manifest_path)
 
 
 def initialize_work_package(

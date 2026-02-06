@@ -87,7 +87,7 @@ def _transition_type(current_stage: str, target_stage: str) -> str:
     current_order = orders[current_stage]
     target_order = orders[target_stage]
     if target_order == current_order:
-        raise ManifestValidationError(f"Work package is already in stage '{current_stage}'")
+        return "noop"
     if target_order == current_order + 1:
         return "advance"
     if target_order < current_order:
@@ -95,6 +95,45 @@ def _transition_type(current_stage: str, target_stage: str) -> str:
     raise ManifestValidationError(
         f"Invalid forward jump: {current_stage} -> {target_stage}. "
         "Only one-step forward transitions are allowed."
+    )
+
+
+def _event_file_for_event_id(approvals_dir: Path, event_id: str) -> Path | None:
+    for event_file in sorted(approvals_dir.glob("*.json")):
+        try:
+            payload = json.loads(event_file.read_text(encoding="utf-8"))
+            if str(payload.get("event_id")) == event_id:
+                return event_file
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _idempotent_same_stage_result(
+    manifest: dict[str, Any],
+    work_package_dir: Path,
+    to_stage: str,
+) -> TransitionResult:
+    last = manifest.get("work_package", {}).get("last_transition", {})
+    if not isinstance(last, dict):
+        raise ManifestValidationError(f"Work package is already in stage '{to_stage}'")
+
+    last_to_stage = str(last.get("to_stage", ""))
+    event_id = str(last.get("event_id", ""))
+    if last_to_stage != to_stage or not event_id:
+        raise ManifestValidationError(f"Work package is already in stage '{to_stage}'")
+
+    approvals_dir = work_package_dir / manifest["paths"]["approvals_root"]
+    event_file = _event_file_for_event_id(approvals_dir, event_id)
+    if event_file is None:
+        event_file = approvals_dir / f"missing-{event_id}.json"
+
+    return TransitionResult(
+        from_stage=str(last.get("from_stage", to_stage)),
+        to_stage=to_stage,
+        transition_type=str(last.get("event_type", "noop")),
+        event_file=event_file,
+        event_id=event_id,
     )
 
 
@@ -166,6 +205,8 @@ def transition_stage(
     from_stage = str(work_package["current_stage"])
 
     _validate_target_stage(to_stage)
+    if to_stage == from_stage:
+        return _idempotent_same_stage_result(manifest, work_package_dir, to_stage)
     transition_type = _transition_type(from_stage, to_stage)
 
     errors = _precondition_errors(work_package_dir, manifest, from_stage, transition_type)
@@ -177,6 +218,7 @@ def transition_stage(
 
     event_id = str(uuid.uuid4())
     event_file = _event_file_path(approvals_dir, transition_type)
+    pending_event_file = event_file.with_suffix(".json.tmp")
     event: dict[str, Any] = {
         "event_id": event_id,
         "event_type": transition_type,
@@ -218,8 +260,14 @@ def transition_stage(
         reason=f"transition:{transition_type}",
     )
 
-    event_file.write_text(json.dumps(event, indent=2), encoding="utf-8")
-    save_manifest(work_package_dir, manifest)
+    pending_event_file.write_text(json.dumps(event, indent=2), encoding="utf-8")
+    try:
+        save_manifest(work_package_dir, manifest)
+    except Exception:
+        if pending_event_file.exists():
+            pending_event_file.unlink()
+        raise
+    pending_event_file.replace(event_file)
     refresh_dashboard(work_package_dir, manifest=manifest)
 
     return TransitionResult(

@@ -1,6 +1,6 @@
 # Single Card Redesign - Sprint Plan
 
-**Status:** IN PROGRESS (Sprints 1-6 complete)
+**Status:** IN PROGRESS (Sprints 1-7 complete; Sprint 8 pending)
 
 ## Status Legend
 
@@ -171,10 +171,10 @@
 
 **Goal:** Safely migrate existing work and reduce operational risk.
 
-1. Build migration utility from current multi-card projects to single-card work packages. `Status: NOT_STARTED`
-2. Add interruption recovery tests (mid-transition crash, partial writes, re-run idempotency). `Status: NOT_STARTED`
-3. Add regression tests for ratchet/test-integrity constraints in new model. `Status: NOT_STARTED`
-4. Publish rollout playbook with phased adoption and rollback plan. `Status: NOT_STARTED`
+1. Build migration utility from current multi-card projects to single-card work packages. `Status: DONE`
+2. Add interruption recovery tests (mid-transition crash, partial writes, re-run idempotency). `Status: DONE`
+3. Add regression tests for ratchet/test-integrity constraints in new model. `Status: DONE`
+4. Publish rollout playbook with phased adoption and rollback plan. `Status: DONE`
 
 **Functional Outcome**
 - Existing projects can migrate with reproducible state and safety guarantees intact.
@@ -186,6 +186,12 @@
 - Migration report
 - Hardening test report
 - Rollout checklist
+
+**Sprint 7 Validation (2026-02-06)**
+- ✅ `pytest tests/` passed (`353 passed`) with Kanboard env vars
+- ✅ Added `migrate-workspace` flow with migration report output and idempotent re-run behavior
+- ✅ Added transition hardening: atomic manifest persistence, pending-event cleanup on failure, same-stage retry idempotency
+- ✅ Published phased rollout + rollback guide in `SINGLE_CARD_ROLLOUT_PLAYBOOK.md`
 
 ## Sprint 8 - OpenCode Workspace Isolation Bug
 

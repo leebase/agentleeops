@@ -36,6 +36,7 @@ from .external_refs import (
     list_external_refs,
 )
 from .local_orchestrator import LocalSyncResult, evaluate_gate, sync_to_stage
+from .migration import migrate_from_workspace
 from .lifecycle import (
     TransitionResult,
     list_approval_events,
@@ -65,6 +66,7 @@ __all__ = [
     "initialize_work_package_from_task",
     "list_external_refs",
     "list_approval_events",
+    "migrate_from_workspace",
     "load_manifest",
     "refresh_artifact_registry",
     "refresh_dashboard",

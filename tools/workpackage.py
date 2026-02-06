@@ -19,6 +19,7 @@ from lib.workpackage import (
     evaluate_gate,
     export_external_refs,
     import_external_refs,
+    migrate_from_workspace,
     refresh_dashboard,
     initialize_work_package,
     initialize_work_package_from_task,
@@ -129,6 +130,27 @@ def _parser() -> argparse.ArgumentParser:
     )
     map_import_parser.add_argument("--work-package-dir", required=True)
     map_import_parser.add_argument("--from-file", required=True)
+
+    migrate_parser = subparsers.add_parser(
+        "migrate-workspace",
+        help="Migrate legacy workspace artifacts into a work package",
+    )
+    migrate_parser.add_argument("--base-dir", default="work-packages")
+    migrate_parser.add_argument("--id", required=True, dest="work_package_id")
+    migrate_parser.add_argument("--title", required=True)
+    migrate_parser.add_argument("--dirname", required=True)
+    migrate_parser.add_argument("--context-mode", required=True, choices=["NEW", "FEATURE"])
+    migrate_parser.add_argument("--workspace-dir", required=True)
+    migrate_parser.add_argument("--task-id", type=int, default=None)
+    migrate_parser.add_argument("--project-id", type=int, default=None)
+    migrate_parser.add_argument("--provider", default="kanboard")
+    migrate_parser.add_argument(
+        "--acceptance",
+        action="append",
+        dest="acceptance_criteria",
+        default=[],
+        help="Acceptance criterion line (repeatable)",
+    )
 
     return parser
 
@@ -256,6 +278,27 @@ def main() -> int:
                 payload=payload,
             )
             print(f"map:import:{applied}")
+            return 0
+
+        if args.command == "migrate-workspace":
+            report = migrate_from_workspace(
+                base_dir=Path(args.base_dir),
+                work_package_id=args.work_package_id,
+                title=args.title,
+                dirname=args.dirname,
+                context_mode=args.context_mode,
+                acceptance_criteria=args.acceptance_criteria,
+                workspace_dir=Path(args.workspace_dir),
+                task_id=args.task_id,
+                project_id=args.project_id,
+                provider=args.provider,
+            )
+            print(
+                "migrate:"
+                f"{report['work_package_dir']}:"
+                f"copied={len(report['copied_files'])}:"
+                f"missing={len(report['missing_required'])}"
+            )
             return 0
     except ManifestValidationError as err:
         print(f"invalid:{err}", file=sys.stderr)

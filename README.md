@@ -119,6 +119,7 @@ Set `AGENTLEEOPS_SINGLE_CARD_MODE=1` to enable the single-card lifecycle adapter
 You can run the single-card lifecycle without Kanboard using `tools/workpackage.py`.
 See `WORKPACKAGE_CLI.md` for command examples (`sync-stage`, `gate`, dashboard refresh, mapping import/export).
 See `EXTERNAL_ADAPTER_CONTRACT.md` for the Jira/ADO adapter contract.
+See `SINGLE_CARD_ROLLOUT_PLAYBOOK.md` for phased adoption and rollback guidance.
 
 ## Development
 

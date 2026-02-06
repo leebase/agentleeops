@@ -54,3 +54,19 @@ python tools/workpackage.py map-import --work-package-dir work-packages/task-101
 ```
 
 These mapping commands are designed for future Jira/ADO adapter interoperability.
+
+## Migration Command
+
+```bash
+python tools/workpackage.py migrate-workspace \
+  --base-dir work-packages \
+  --id task-101 \
+  --title "Legacy story migration" \
+  --dirname legacy-story \
+  --context-mode FEATURE \
+  --workspace-dir ~/projects/legacy-story \
+  --acceptance "migration preserves artifacts"
+```
+
+This creates or reconciles `work-packages/task-101`, copies known artifacts, refreshes
+artifact/dashboard state, and writes `migration/migration-report.json`.
