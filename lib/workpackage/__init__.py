@@ -16,6 +16,14 @@ from .service import (
     save_manifest,
 )
 from .artifacts import refresh_artifact_registry
+from .adapter import (
+    AdapterSyncResult,
+    GateDecision,
+    KanboardLifecycleAdapter,
+    WorkItemLifecycleAdapter,
+    normalize_column_title,
+    stage_for_column,
+)
 from .dashboard import (
     build_dashboard_data,
     refresh_dashboard,
@@ -30,10 +38,14 @@ from .lifecycle import (
 
 __all__ = [
     "ARTIFACT_STAGE_DIRS",
+    "AdapterSyncResult",
+    "GateDecision",
+    "KanboardLifecycleAdapter",
     "ManifestValidationError",
     "SCHEMA_VERSION",
     "STAGES",
     "TransitionResult",
+    "WorkItemLifecycleAdapter",
     "build_manifest",
     "build_dashboard_data",
     "get_manifest_path",
@@ -46,6 +58,8 @@ __all__ = [
     "replay_summary",
     "render_dashboard_html",
     "save_manifest",
+    "normalize_column_title",
+    "stage_for_column",
     "transition_stage",
     "validate_manifest",
 ]

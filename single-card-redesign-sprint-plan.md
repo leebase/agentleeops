@@ -1,6 +1,6 @@
 # Single Card Redesign - Sprint Plan
 
-**Status:** IN PROGRESS (Sprints 1-4 complete)
+**Status:** IN PROGRESS (Sprints 1-5 complete)
 
 ## Status Legend
 
@@ -121,10 +121,10 @@
 
 **Goal:** Replace multi-card fan-out with single-card lifecycle orchestration.
 
-1. Introduce a work item adapter interface (Kanban-independent contract). `Status: NOT_STARTED`
-2. Implement Kanban adapter that maps card moves to lifecycle transitions. `Status: NOT_STARTED`
-3. Gate stage automation off local artifact state, not card proliferation. `Status: NOT_STARTED`
-4. Add feature flag for legacy multi-card vs new single-card mode. `Status: NOT_STARTED`
+1. Introduce a work item adapter interface (Kanban-independent contract). `Status: DONE`
+2. Implement Kanban adapter that maps card moves to lifecycle transitions. `Status: DONE`
+3. Gate stage automation off local artifact state, not card proliferation. `Status: DONE`
+4. Add feature flag for legacy multi-card vs new single-card mode. `Status: DONE`
 
 **Functional Outcome**
 - A single card can drive the full lifecycle while local artifacts remain authoritative.
@@ -135,6 +135,12 @@
 **Checkpoint Artifacts**
 - Adapter configuration
 - Transition audit log for one full run
+
+**Sprint 5 Validation (2026-02-06)**
+- ✅ `pytest tests/` passed (`345 passed`) with Kanboard env vars
+- ✅ Added `KanboardLifecycleAdapter` + provider-agnostic adapter contract in `lib/workpackage/adapter.py`
+- ✅ Orchestrator single-card mode (`AGENTLEEOPS_SINGLE_CARD_MODE=1`) now syncs Kanboard column state to local lifecycle and gates agent runs on artifact freshness
+- ✅ Live single-card smoke (`task #12`) completed Plan Approved processing with `spawned` tag and `0` child links (fan-out disabled)
 
 ## Sprint 6 - CLI-First Flow + External Adapter Readiness
 

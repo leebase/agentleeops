@@ -106,6 +106,14 @@ Both modes support all 6 agents: ARCHITECT, GOVERNANCE, PM, SPAWNER, TEST, and R
 See `product-definition.md` for the full workflow specification.
 See `USER_STORY_WORKFLOW.md` for step-by-step operator instructions.
 
+### Single-Card Mode (Feature Flag)
+
+Set `AGENTLEEOPS_SINGLE_CARD_MODE=1` to enable the single-card lifecycle adapter:
+
+- Kanboard column moves are synchronized into local `work-packages/task-<id>/` lifecycle state.
+- Spawner fan-out is disabled; the same card is moved through later stages.
+- Agent execution is gated by local artifact freshness (for example, stale design blocks planning).
+
 ## Development
 
 - Dependencies are listed in `requirements.txt`.

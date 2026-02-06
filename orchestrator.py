@@ -15,11 +15,13 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 
 from dotenv import load_dotenv
 from kanboard import Client
 
 from lib.task_fields import get_task_fields, update_status, TaskFieldError, get_task_tags, add_task_tag, has_tag
+from lib.workpackage import KanboardLifecycleAdapter
 
 # Load environment variables from .env file
 load_dotenv()
@@ -103,6 +105,14 @@ from lib.logger import get_logger
 
 log = get_logger("ORCHESTRATOR")
 
+SINGLE_CARD_MODE = os.getenv("AGENTLEEOPS_SINGLE_CARD_MODE", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+_SINGLE_CARD_ADAPTER: KanboardLifecycleAdapter | None = None
+
 
 NORMALIZED_TRIGGER_MAP = {
     "design draft": "ARCHITECT_AGENT",
@@ -127,6 +137,51 @@ def resolve_trigger_action(column_title: str) -> str | None:
     if column_title in TRIGGERS:
         return TRIGGERS[column_title]
     return NORMALIZED_TRIGGER_MAP.get(_normalize_column_title(column_title))
+
+
+def _get_single_card_adapter() -> KanboardLifecycleAdapter:
+    global _SINGLE_CARD_ADAPTER
+    if _SINGLE_CARD_ADAPTER is None:
+        _SINGLE_CARD_ADAPTER = KanboardLifecycleAdapter(base_dir=Path("work-packages"))
+    return _SINGLE_CARD_ADAPTER
+
+
+def _sync_single_card_state(
+    kb,
+    task: dict,
+    project_id: int,
+    column_title: str,
+) -> Path | None:
+    if not SINGLE_CARD_MODE:
+        return None
+
+    task_id = int(task["id"])
+    try:
+        fields = get_task_fields(kb, task_id)
+    except TaskFieldError as err:
+        log.warning(f"Single-card sync skipped: {err}", task_id=task_id)
+        return None
+
+    adapter = _get_single_card_adapter()
+    work_package_dir = adapter.ensure_work_package(
+        task_id=task_id,
+        title=task.get("title", f"Task {task_id}"),
+        project_id=project_id,
+        fields=fields,
+    )
+    try:
+        adapter.sync_to_column(
+            work_package_dir=work_package_dir,
+            column_title=column_title,
+            actor=f"kanboard:{task_id}",
+        )
+    except Exception as err:
+        log.warning(
+            f"Single-card lifecycle sync skipped: {err}",
+            task_id=task_id,
+            column=column_title,
+        )
+    return work_package_dir
 
 
 def _replace_task_tags(kb, project_id: int, task_id: int, tags: list[str]) -> None:
@@ -382,6 +437,23 @@ def process_spawner_task(kb, task: dict, project_id: int) -> bool:
     title = task['title']
 
     agent_tags = TAGS["SPAWNER_AGENT"]
+
+    if SINGLE_CARD_MODE:
+        if has_tag(tags, agent_tags["completed"]):
+            return False
+        if has_tag(tags, agent_tags["started"]):
+            return False
+        add_task_tag(kb, project_id, task_id, agent_tags["started"])
+        _mark_agent_succeeded(kb, project_id, task_id, agent_tags)
+        kb.create_comment(
+            task_id=task_id,
+            user_id=1,
+            content=(
+                "**SPAWNER**: Single-card mode enabled. Child fan-out is disabled; "
+                "continue this same card through Tests Draft."
+            ),
+        )
+        return True
 
     # Only run if not already spawned
     if has_tag(tags, agent_tags["completed"]):
@@ -697,7 +769,13 @@ def process_code_review_task(kb, task: dict, project_id: int) -> bool:
     return False
 
 
-def process_task(kb, task: dict, action: str, project_id: int) -> bool:
+def process_task(
+    kb,
+    task: dict,
+    action: str,
+    project_id: int,
+    work_package_dir: Path | None = None,
+) -> bool:
     """
     Route task to appropriate agent.
 
@@ -708,6 +786,17 @@ def process_task(kb, task: dict, action: str, project_id: int) -> bool:
     title = task['title']
 
     log.info(f"Triggering {action}", task_id=task_id, action=action)
+
+    if SINGLE_CARD_MODE and work_package_dir is not None:
+        decision = _get_single_card_adapter().gate_action(work_package_dir, action)
+        if not decision.allowed:
+            log.warning(
+                "Single-card gate blocked action",
+                task_id=task_id,
+                action=action,
+                reason=decision.reason,
+            )
+            return False
 
     if action == "ARCHITECT_AGENT":
         return process_architect_task(kb, task, project_id)
@@ -757,6 +846,9 @@ def run_once(kb, project_id: int = 1):
 
         action = resolve_trigger_action(col_name)
         if action:
+            work_package_dir: Path | None = None
+            if SINGLE_CARD_MODE and col_name:
+                work_package_dir = _sync_single_card_state(kb, task, project_id, col_name)
 
             # Check if already processed
             tags = get_task_tags(kb, task['id'])
@@ -771,7 +863,7 @@ def run_once(kb, project_id: int = 1):
                 continue  # Skip in-progress tasks
 
             # Found an unprocessed task
-            if process_task(kb, task, action, project_id):
+            if process_task(kb, task, action, project_id, work_package_dir=work_package_dir):
                 log.info("Run Once completed successfully.")
                 return
             else:
@@ -809,6 +901,9 @@ def run_polling(kb, project_id: int = 1, poll_interval: int = 5):
 
                 action = resolve_trigger_action(col_name)
                 if action:
+                    work_package_dir: Path | None = None
+                    if SINGLE_CARD_MODE and col_name:
+                        work_package_dir = _sync_single_card_state(kb, task, project_id, col_name)
 
                     # Check if already processed
                     tags = get_task_tags(kb, task['id'])
@@ -823,7 +918,7 @@ def run_polling(kb, project_id: int = 1, poll_interval: int = 5):
                         continue
 
                     # Process the task
-                    process_task(kb, task, action, project_id)
+                    process_task(kb, task, action, project_id, work_package_dir=work_package_dir)
 
         except KeyboardInterrupt:
             log.info("Stopping orchestrator.")
