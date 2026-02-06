@@ -1,6 +1,6 @@
 # Single Card Redesign - Sprint Plan
 
-**Status:** IN PROGRESS (planning only, implementation not started)
+**Status:** IN PROGRESS (Sprints 1-3 complete)
 
 ## Status Legend
 
@@ -70,10 +70,10 @@
 
 **Goal:** Detect artifact drift after approval.
 
-1. Implement artifact indexing for all stage directories. `Status: NOT_STARTED`
-2. Compute and persist integrity hashes for tracked artifacts. `Status: NOT_STARTED`
-3. Add state model per artifact (`draft`, `approved`, `stale`, `superseded`). `Status: NOT_STARTED`
-4. Implement stale recomputation after file change and transition events. `Status: NOT_STARTED`
+1. Implement artifact indexing for all stage directories. `Status: DONE`
+2. Compute and persist integrity hashes for tracked artifacts. `Status: DONE`
+3. Add state model per artifact (`draft`, `approved`, `stale`, `superseded`). `Status: DONE`
+4. Implement stale recomputation after file change and transition events. `Status: DONE`
 
 **Functional Outcome**
 - Approved artifacts automatically become stale when modified.
@@ -85,6 +85,12 @@
 - Updated `manifest.yaml` artifact registry
 - Hash snapshot data
 - Staleness evaluation log
+
+**Sprint 3 Validation (2026-02-06)**
+- ✅ `pytest tests/` passed (`338 passed`) with Kanboard env vars
+- ✅ Lifecycle transitions now auto-refresh artifact registry with per-file SHA256 snapshots
+- ✅ `tools/workpackage.py refresh-artifacts` reports deterministic state counts
+- ✅ Exit-test smoke run confirmed approved artifact drift transitions to `stale`
 
 ## Sprint 4 - Dashboard Data + Static HTML
 

@@ -16,6 +16,7 @@ from lib.workpackage import (
     ManifestValidationError,
     initialize_work_package,
     initialize_work_package_from_task,
+    refresh_artifact_registry,
     replay_summary,
     transition_stage,
     load_manifest,
@@ -70,6 +71,12 @@ def _parser() -> argparse.ArgumentParser:
 
     history_parser = subparsers.add_parser("history", help="Print transition replay summary")
     history_parser.add_argument("--work-package-dir", required=True)
+
+    refresh_parser = subparsers.add_parser(
+        "refresh-artifacts",
+        help="Recompute artifact hashes and freshness state",
+    )
+    refresh_parser.add_argument("--work-package-dir", required=True)
 
     return parser
 
@@ -129,6 +136,18 @@ def main() -> int:
         if args.command == "history":
             for line in replay_summary(Path(args.work_package_dir)):
                 print(line)
+            return 0
+
+        if args.command == "refresh-artifacts":
+            state = refresh_artifact_registry(Path(args.work_package_dir))
+            counts = state.get("counts", {})
+            print(
+                "artifacts:"
+                f"draft={counts.get('draft', 0)}:"
+                f"approved={counts.get('approved', 0)}:"
+                f"stale={counts.get('stale', 0)}:"
+                f"superseded={counts.get('superseded', 0)}"
+            )
             return 0
     except ManifestValidationError as err:
         print(f"invalid:{err}", file=sys.stderr)

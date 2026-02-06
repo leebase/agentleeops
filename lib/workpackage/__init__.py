@@ -15,6 +15,7 @@ from .service import (
     load_manifest,
     save_manifest,
 )
+from .artifacts import refresh_artifact_registry
 from .lifecycle import (
     TransitionResult,
     list_approval_events,
@@ -34,6 +35,7 @@ __all__ = [
     "initialize_work_package_from_task",
     "list_approval_events",
     "load_manifest",
+    "refresh_artifact_registry",
     "replay_summary",
     "save_manifest",
     "transition_stage",

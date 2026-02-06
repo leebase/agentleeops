@@ -142,4 +142,24 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
             if not str(paths.get(path_key, "")).strip():
                 errors.append(f"paths.{path_key} is required")
 
+    artifacts = manifest.get("artifacts")
+    if artifacts is not None:
+        if not isinstance(artifacts, dict):
+            errors.append("artifacts must be an object when present")
+        else:
+            items = artifacts.get("items", {})
+            if not isinstance(items, dict):
+                errors.append("artifacts.items must be an object when present")
+            else:
+                allowed_states = {"draft", "approved", "stale", "superseded"}
+                for key, value in items.items():
+                    if not isinstance(value, dict):
+                        errors.append(f"artifacts.items.{key} must be an object")
+                        continue
+                    state = value.get("state")
+                    if state and state not in allowed_states:
+                        errors.append(
+                            f"artifacts.items.{key}.state must be one of {sorted(allowed_states)}"
+                        )
+
     return errors
