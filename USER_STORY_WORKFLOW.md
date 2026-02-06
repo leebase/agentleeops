@@ -1,105 +1,72 @@
-# User Guide: Creating and Running a Story End-to-End
+# User Guide: Running a Story End-to-End
 
-This guide explains how to create a story in AgentLeeOps, why each lane exists, where human approvals are required, and how parent/child execution works in the Ralph loop.
+This guide covers current AgentLeeOps execution after single-card redesign Sprints 1-7.
 
-## Why This Workflow Exists
+## Choose an Operating Mode
 
-AgentLeeOps is designed for safe, auditable delivery with AI:
+### Mode A: Single-Card (Recommended)
 
-- Design, tests, and code are separated.
-- Human approvals create governance checkpoints.
-- Approved artifacts are locked (ratchet) so later stages cannot silently rewrite requirements.
-- Progress is resumable and deterministic with tag/state tracking.
+- Enable `AGENTLEEOPS_SINGLE_CARD_MODE=1`.
+- Keep one card moving through all lanes.
+- Local package `work-packages/task-<id>/` is authoritative for lifecycle and artifacts.
+- Spawner fan-out is disabled.
 
-## The 11 Lanes and Their Purpose
+### Mode B: Legacy Multi-Card
 
-1. `1. Inbox`
-- Purpose: intake and triage.
-- Human action: create or refine story intent.
+- Default when single-card mode is off.
+- Plan Approved can still spawn child cards.
+- Use if you explicitly want parent/child fan-out behavior.
 
-2. `2. Design Draft`
-- Purpose: ARCHITECT_AGENT generates `DESIGN.md`.
-- Human action: review design quality and scope.
+## Lanes and Human Gates
 
-3. `3. Design Approved`
-- Purpose: GOVERNANCE_AGENT locks `DESIGN.md`.
-- Human action: approval gate; only approve when design is good enough to freeze.
+1. `1. Inbox` - intake.
+2. `2. Design Draft` - ARCHITECT_AGENT writes design artifact.
+3. `3. Design Approved` - human gate.
+4. `4. Planning Draft` - PM_AGENT writes planning artifact.
+5. `5. Plan Approved` - human gate.
+6. `6. Tests Draft` - TEST_AGENT writes test plan artifacts.
+7. `7. Tests Approved` - human gate; test code generation/lock flow.
+8. `8. Ralph Loop` - implementation against test contract.
+9. `9. Code Review` - review agent gate artifacts.
+10. `10. Final Review` - human final approval.
+11. `11. Done` - completion.
 
-4. `4. Planning Draft`
-- Purpose: PM_AGENT generates `prd.json` with atomic stories.
-- Human action: check decomposition quality.
+Required human approvals remain at:
+- `3. Design Approved`
+- `5. Plan Approved`
+- `7. Tests Approved`
+- `10. Final Review`
 
-5. `5. Plan Approved`
-- Purpose: GOVERNANCE_AGENT locks `prd.json`; SPAWNER_AGENT creates child stories.
-- Human action: confirm plan before fan-out.
+## Services Required for Board Automation
 
-6. `6. Tests Draft`
-- Purpose: TEST_AGENT creates test plans/spec artifacts for each child.
-- Human action: verify test intent before code implementation.
-
-7. `7. Tests Approved`
-- Purpose: TEST_CODE_AGENT generates `tests/test_*.py` from approved test plans, then GOVERNANCE_AGENT locks tests.
-- Human action: approval gate for test contract.
-
-8. `8. Ralph Loop`
-- Purpose: RALPH_CODER implements code to satisfy locked tests.
-- Human action: monitor failures/escalations only; no test rewriting.
-
-9. `9. Code Review`
-- Purpose: CODE_REVIEW_AGENT runs an expandable review set and generates:
-  - `reviews/CODE_REVIEW_REPORT.json`
-  - `reviews/CODE_REVIEW_NEXT_STEPS.md`
-- Human action: consume prioritized next steps and decide what must be fixed before final approval.
-
-10. `10. Final Review`
-- Purpose: human validation of delivered behavior and diffs.
-- Human action: accept/reject implementation quality.
-
-11. `11. Done`
-- Purpose: workflow complete.
-
-## Automation Services Must Be Running
-
-Lane automation depends on two background services:
-
-- `webhook_server.py` receives Kanboard webhooks.
-- `orchestrator.py` polls Kanboard and triggers agents.
-
-Start both from the repo root:
+Run both processes from repo root:
 
 ```bash
-nohup ./venv/bin/python webhook_server.py --port 5000 > webhook_server.out 2>&1 & echo $! > webhook_server.pid
-nohup ./venv/bin/python orchestrator.py > orchestrator.out 2>&1 & echo $! > orchestrator.pid
+python -u webhook_server.py --port 5000
+python orchestrator.py --poll-interval 10
 ```
 
-Quick health check:
+Verify quickly:
 
 ```bash
 tail -n 5 webhook_server.out
 tail -n 5 orchestrator.out
 ```
 
-If a lane does not auto-generate after a move, confirm both processes are running and that `KANBOARD_URL`, `KANBOARD_USER`, and `KANBOARD_TOKEN` are set in `.env`.
-
 ## Local Kanboard Setup (MetaMagik + Swimlanes)
 
-For local macOS setup, avoid port conflicts with system services by running Kanboard on `18080` and webhook on `5050`.
-
-1. Start Kanboard:
 ```bash
 docker run -d --name kanboard-local -p 18080:80 kanboard/kanboard:latest
 ```
-2. Install MetaMagik in the running container:
+
+Install MetaMagik:
+
 ```bash
 docker exec kanboard-local sh -lc 'apk add --no-cache git && cd /var/www/app/plugins && git clone --depth 1 https://github.com/creecros/MetaMagik.git'
 ```
-3. Create/use local Python env:
-```bash
-python3.11 -m venv .macenv
-source .macenv/bin/activate
-pip install -r requirements.txt
-```
-4. Configure board columns, swimlanes, and tags:
+
+Provision board layout:
+
 ```bash
 KANBOARD_URL=http://127.0.0.1:18080/jsonrpc.php \
 KANBOARD_USER=admin \
@@ -107,82 +74,64 @@ KANBOARD_TOKEN=admin \
 python setup-board.py
 ```
 
-`setup-board.py` now provisions:
-- all 11 workflow columns
-- swimlanes: `Parent Stories`, `Atomic Stories`
+`setup-board.py` configures:
+- all 11 columns
+- swimlanes (`Parent Stories`, `Atomic Stories`)
 - standard tags
 
-## Creating a Story Card
+## Card Metadata Contract
 
-Create a Kanboard card with required fields:
+Preferred: MetaMagik task metadata.
+Fallback: YAML in card description.
 
-- `dirname`: workspace name (lowercase letters, digits, dashes only)
-- `context_mode`: `NEW` or `FEATURE`
-- `acceptance_criteria`: explicit checklist
+Required fields:
+- `dirname`
+- `context_mode` (`NEW` or `FEATURE`)
+- `acceptance_criteria`
 
-You can provide these via MetaMagik custom fields (preferred) or YAML in description (legacy).
+## Single-Card Lane Movement
 
-Example YAML fallback:
+Move the same card through:
 
-```yaml
-dirname: cf-tunnel-create
-context_mode: NEW
-acceptance_criteria: |
-  - CLI can apply a tunnel spec
-  - Operation is idempotent
-  - Tests cover parser and state behavior
+`2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11`
+
+At each stage, verify local package state in:
+- `manifest.yaml`
+- `approvals/*.json`
+- `dashboard/dashboard.json`
+
+## CLI-Only Alternative (No Kanboard)
+
+You can run lifecycle locally:
+
+```bash
+python tools/workpackage.py init --id task-101 --title "Example" --dirname example --context-mode NEW --acceptance "criterion"
+python tools/workpackage.py sync-stage --work-package-dir work-packages/task-101 --to-stage plan_approved
+python tools/workpackage.py gate --work-package-dir work-packages/task-101 --action PM_AGENT
+python tools/workpackage.py refresh-artifacts --work-package-dir work-packages/task-101
+python tools/workpackage.py refresh-dashboard --work-package-dir work-packages/task-101
 ```
 
-## How to Move a Story Through the Lanes
+## Retry and Recovery
 
-Use this sequence for a parent story:
+- Failed actions clear stale `*-started` and set `*-failed`.
+- Successful actions clear stale `*-failed`.
+- Transition persistence is hardened for partial-failure cleanup and idempotent same-stage retries.
+- Use `tools/workpackage.py history` for replay visibility.
 
-1. Move parent card to `2. Design Draft`.
-2. Wait for design generation, review artifact, then move to `3. Design Approved`.
-3. Move to `4. Planning Draft`, review plan, then move to `5. Plan Approved`.
-4. After spawn, work child stories one at a time:
-- Child: `5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11`
-  - Optional: moving the parent to `7. Tests Approved` can batch-generate tests for linked children.
-5. After all children are complete, move parent to `8. Ralph Loop` (if using parent batch path), then `9`, then `10`, then `11`.
+## Migration from Legacy Workspaces
 
-## Human Interaction and Governance: What Must Stay Human
+Migrate existing story artifacts into work packages:
 
-Human approval is intentionally required at:
+```bash
+python tools/workpackage.py migrate-workspace \
+  --base-dir work-packages \
+  --id task-101 \
+  --title "Migrated story" \
+  --dirname migrated-story \
+  --context-mode FEATURE \
+  --workspace-dir ~/projects/migrated-story \
+  --acceptance "migration keeps artifacts"
+```
 
-- `3. Design Approved`
-- `5. Plan Approved`
-- `7. Tests Approved`
-- `10. Final Review`
-
-Why:
-
-- These gates prevent hidden requirement drift.
-- They preserve test integrity and traceability.
-- They enforce the ratchet effect (approved artifacts become immutable for agents).
-
-## Important: Parent Story in Ralph Loop (Top Story Behavior)
-
-### What happens when you move the parent (top story) to `8. Ralph Loop`?
-
-Confirmed behavior in current product:
-
-- Moving the parent to `8. Ralph Loop` triggers Ralph for that parent task.
-- Ralph detects linked child stories and can run in batch mode against their tests.
-- This can implement multiple linked atomic stories in one loop if required test files exist.
-
-### What does NOT happen automatically?
-
-- Child cards are **not automatically moved between Kanboard lanes** when you move the parent.
-- Lane movement remains explicit and visible in Kanboard for governance/auditability.
-
-So, moving the top story to Ralph loop can drive batch implementation logic, but it does not physically drag linked cards across columns.
-
-## Retry and Stale Tag Handling
-
-AgentLeeOps uses `started/completed/failed` tags per phase.
-
-- On failure: system removes `*-started` and adds `*-failed`.
-- On success: system adds `*-completed` and clears stale `*-failed`.
-- If a task has both `*-started` and `*-failed` (legacy stale state), system auto-clears `*-started` to unblock retry.
-
-This enables safe, autonomous retries without manual tag cleanup.
+This creates `migration/migration-report.json` in the target work package.

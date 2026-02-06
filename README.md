@@ -1,281 +1,171 @@
 # AgentLeeOps
 
-AgentLeeOps is an orchestration framework for running high-discipline, multi-agent software development workflows on top of Kanboard and a local git workspace. It encodes a strict, artifact-driven process so that work can be resumed, audited, and extended reliably over time.
+AgentLeeOps is an approval-gated software delivery system that combines Kanboard orchestration with local, durable artifacts. It now supports both legacy multi-card fan-out and a single-card lifecycle model backed by local work packages.
 
-## Goals
+## Current Scope (Sprints 1-7)
 
-- Enforce an **11-stage Kanboard workflow** from idea intake through final review.
-- Preserve **test integrity** by separating authorship of implementation and tests.
-- Prefer **written artifacts over chat** for all durable decisions and designs.
-- Make the system **resumable** so work can stop and restart without losing context.
+- 11-stage Kanboard lifecycle with human gates.
+- Work package model under `work-packages/task-<id>/`.
+- Lifecycle transitions with immutable approval events.
+- Artifact integrity tracking (`draft`, `approved`, `stale`, `superseded`).
+- Static dashboard output (`dashboard/dashboard.json`, `dashboard/dashboard.html`).
+- Single-card mode with local artifact gating.
+- CLI-first lifecycle operations (no board required).
+- External work-item mapping import/export and adapter contract.
+- Migration utility + rollout playbook.
 
-## Workflow Overview
+## Workflow Modes
 
-AgentLeeOps defines a Kanboard pipeline with the following columns (left to right):
+### 1) Legacy Multi-Card Mode
 
-1. **Inbox** – New work items arrive, minimally triaged.
-2. **Design Draft** – ARCHITECT_AGENT produces `DESIGN.md` for the card.
-3. **Design Approved** – Human reviews design; GOVERNANCE_AGENT locks artifacts.
-4. **Planning Draft** – PM_AGENT generates `prd.json` with atomic stories.
-5. **Plan Approved** – Human reviews plan; SPAWNER_AGENT creates child story cards (remain in this column for human control).
-6. **Tests Draft** – TEST_AGENT generates test plans for each story (move stories here one at a time).
-7. **Tests Approved** – Human approves test plans; TEST_CODE_AGENT generates test code and GOVERNANCE_AGENT locks test files.
-8. **Ralph Loop** – RALPH_CODER implements code to pass tests (move stories here one at a time).
-9. **Code Review** – CODE_REVIEW_AGENT runs the review suite and publishes prioritized next steps.
-10. **Final Review** – Human performs final review on code, artifacts, and review outputs.
-11. **Done** – Work is complete and merged.
+- Plan approval spawns child cards.
+- Child cards move through tests/coding lanes individually.
+- Existing fan-out workflow remains supported.
 
-**Human-Controlled Story Flow:**
-- Parent story stays in "Plan Approved" after spawning
-- Child stories are created in "Plan Approved" for editing
-- Move each child story to "Tests Draft" → "Tests Approved" → "Ralph Loop" → "Code Review" one at a time
-- This prevents explosion of simultaneous LLM calls
+### 2) Single-Card Mode (Recommended)
 
-Each column has an explicit owner and required artifacts (e.g., `DESIGN.md`, test files, plan documents), as defined in `product-definition.md`.
+Enable with:
 
+```bash
+export AGENTLEEOPS_SINGLE_CARD_MODE=1
+```
+
+Behavior:
+- Kanboard lane moves sync to local lifecycle state in `work-packages/task-<id>/`.
+- Spawner fan-out is disabled.
+- Agent actions are gated by local artifact freshness (for example, stale design blocks planning).
+
+## 11-Lane Board
+
+1. Inbox
+2. Design Draft
+3. Design Approved
+4. Planning Draft
+5. Plan Approved
+6. Tests Draft
+7. Tests Approved
+8. Ralph Loop
+9. Code Review
+10. Final Review
+11. Done
+
+## Local Work Package Layout
+
+Each task package is materialized as:
+
+```text
+work-packages/task-<id>/
+  manifest.yaml
+  approvals/*.json
+  artifacts/
+    design/
+    planning/
+    tests/
+    implementation/
+  dashboard/
+    dashboard.json
+    dashboard.html
+  migration/
+    migration-report.json   # when migration utility is used
+```
 
 ## Core Rules
 
-- **Ratchet Effect**
-  - Once Lee has approved a design, tests, or a plan, agents must not regress these guarantees without Lee explicitly moving the card back to an earlier column.
+- Ratchet governance: approved artifacts are immutable unless intentionally reopened.
+- Double-blind testing: implementation and tests are produced by different roles.
+- Test integrity: agents do not modify `tests/` unless explicitly in test-authoring flow.
+- Idempotent retries: started/failed/completed tag logic auto-unblocks stale states.
+- Artifacts over chat: durable state lives in versioned files.
 
-- **Double-Blind Rule**
-  - Ralph (implementation) does not design tests for his own work.
-  - A separate tests agent creates or updates tests; Ralph only works to make those tests pass.
+## Running Automation
 
-- **Test Integrity (Non‑Negotiable)**
-  - Agents must not modify anything under `tests/` unless Lee explicitly moves the card back to the "Repo & Tests Draft" column.
+### Webhook server
 
-- **Artifacts over Chat**
-  - Durable decisions, designs, and plans live in version-controlled artifacts (e.g., `DESIGN.md`, plan docs) rather than transient chat.
-
-- **Agent Tag State + Auto-Retry**
-  - Each agent uses tags to track progress: `*-started`, `*-complete`, and `*-failed`.
-  - On failure, orchestrator/webhook remove `*-started` and add `*-failed` so the task is not stuck.
-  - On success, orchestrator/webhook add `*-complete` and clear any stale `*-failed`.
-  - If a task has both `*-failed` and `*-started` (legacy/stale state), the system auto-clears `*-started` to unblock retries.
-
-## Card Input Contract
-
-Every Kanboard card is expected to provide a YAML input block (typically in its description) with at least:
-
-- `dirname` – The project directory name.
-- `context_mode` – One of:
-  - `NEW` – Create a brand new repository/workspace for this card.
-  - `FEATURE` – Work in an existing repository.
-- `acceptance_criteria` – A structured list of conditions that must be satisfied for the card to be considered done.
-
-The orchestrator parses this block and uses it to decide how to set up the workspace and what actions to take.
-
-## Context Modes
-
-- **NEW**
-  - Create a fresh workspace at `~/projects/<dirname>`.
-  - Initialize a new git repository.
-  - Scaffold initial structure and configuration according to the design.
-
-- **FEATURE**
-  - Use an existing workspace at `~/projects/<dirname>`.
-  - Ensure it is up to date (e.g., `git pull`).
-  - Create a feature branch for the card and apply changes there.
-
-## Git and Workspace Conventions
-
-- **Workspace root:** `~/projects/<dirname>`.
-- **Repository ownership:** typically `leebase/<dirname>`.
-- **Branch naming:** `feat/<task_id>-<dirname>`.
-- **History:** aim for clean, reviewable commits that reflect artifact checkpoints (design, tests, plan, implementation).
-
-## Running the System
-
-Two modes are available:
-
-### Webhook Mode (Recommended)
 ```bash
 python -u webhook_server.py --port 5000
 ```
-Configure Kanboard webhook URL to `http://<your-ip>:5000/`. Cards moving to trigger columns automatically invoke agents.
 
-### Polling Mode
+### Polling orchestrator
+
 ```bash
 python orchestrator.py --poll-interval 10
 ```
 
-Both modes support all 6 agents: ARCHITECT, GOVERNANCE, PM, SPAWNER, TEST, and RALPH.
+Both modes require Kanboard env vars (`KANBOARD_URL`, `KANBOARD_USER`, `KANBOARD_TOKEN`).
 
-See `product-definition.md` for the full workflow specification.
-See `USER_STORY_WORKFLOW.md` for step-by-step operator instructions.
+## CLI-First Lifecycle
 
-### Single-Card Mode (Feature Flag)
+`tools/workpackage.py` can execute lifecycle work without Kanboard.
 
-Set `AGENTLEEOPS_SINGLE_CARD_MODE=1` to enable the single-card lifecycle adapter:
+Key commands:
 
-- Kanboard column moves are synchronized into local `work-packages/task-<id>/` lifecycle state.
-- Spawner fan-out is disabled; the same card is moved through later stages.
-- Agent execution is gated by local artifact freshness (for example, stale design blocks planning).
+```bash
+python tools/workpackage.py init --id task-101 --title "Example" --dirname example --context-mode NEW --acceptance "criterion"
+python tools/workpackage.py validate --work-package-dir work-packages/task-101
+python tools/workpackage.py transition --work-package-dir work-packages/task-101 --to-stage design_draft
+python tools/workpackage.py sync-stage --work-package-dir work-packages/task-101 --to-stage plan_approved
+python tools/workpackage.py gate --work-package-dir work-packages/task-101 --action PM_AGENT
+python tools/workpackage.py refresh-artifacts --work-package-dir work-packages/task-101
+python tools/workpackage.py refresh-dashboard --work-package-dir work-packages/task-101
+python tools/workpackage.py map-add --work-package-dir work-packages/task-101 --provider jira --external-id PROJ-123
+python tools/workpackage.py map-export --work-package-dir work-packages/task-101 --out mapping.json
+python tools/workpackage.py map-import --work-package-dir work-packages/task-101 --from-file mapping.json
+python tools/workpackage.py migrate-workspace --base-dir work-packages --id task-101 --title "Legacy migration" --dirname legacy --context-mode FEATURE --workspace-dir ~/projects/legacy
+```
 
-### CLI-First Lifecycle
+See:
+- `WORKPACKAGE_CLI.md`
+- `EXTERNAL_ADAPTER_CONTRACT.md`
+- `SINGLE_CARD_ROLLOUT_PLAYBOOK.md`
 
-You can run the single-card lifecycle without Kanboard using `tools/workpackage.py`.
-See `WORKPACKAGE_CLI.md` for command examples (`sync-stage`, `gate`, dashboard refresh, mapping import/export).
-See `EXTERNAL_ADAPTER_CONTRACT.md` for the Jira/ADO adapter contract.
-See `SINGLE_CARD_ROLLOUT_PLAYBOOK.md` for phased adoption and rollback guidance.
+## Local Kanboard Setup (MetaMagik + Swimlanes)
+
+```bash
+docker run -d --name kanboard-local -p 18080:80 kanboard/kanboard:latest
+```
+
+Install MetaMagik plugin:
+
+```bash
+docker exec kanboard-local sh -lc 'apk add --no-cache git && cd /var/www/app/plugins && git clone --depth 1 https://github.com/creecros/MetaMagik.git'
+```
+
+Create Python environment (macOS):
+
+```bash
+python3.11 -m venv .macenv
+source .macenv/bin/activate
+pip install -r requirements.txt
+```
+
+Provision board columns/swimlanes/tags:
+
+```bash
+KANBOARD_URL=http://127.0.0.1:18080/jsonrpc.php \
+KANBOARD_USER=admin \
+KANBOARD_TOKEN=admin \
+python setup-board.py
+```
 
 ## Development
 
-- Dependencies are listed in `requirements.txt`.
-- Use a virtual environment (e.g., `.venv/`) and install with:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-  ```bash
-  python -m venv .venv
-  source .venv/bin/activate
-  pip install -r requirements.txt
-  ```
-
-- **LLM Configuration:** Set `OPENROUTER_API_KEY` in `.env` for production LLM calls
-  - Get your API key from: https://openrouter.ai/keys
-  - See `config/llm.yaml` for role-based LLM routing configuration
-- Legacy: Verify OpenCode CLI: `opencode --version` (optional, for backward compatibility)
+If `.venv` came from Linux, use `.macenv` on macOS.
 
 ## Testing
 
 ```bash
-# Run all tests
 pytest tests/
-
-# Run specific test modules
-pytest tests/test_ratchet.py tests/test_syntax_guard.py -v
 ```
 
-The test suite (257 tests) covers: ratchet governance, LLM syntax validation, LLM provider abstraction (HTTP & CLI providers), JSON repair monitoring, prompt compression, provider health checks, performance profiling, task field parsing, workspace management, and Sprint 17 production readiness fixes.
-
-## Monitoring & Observability
-
-AgentLeeOps includes comprehensive monitoring and health check tools for LLM operations:
-
-### Provider Health Checks
-
-```bash
-# Check all configured providers
-python -m lib.llm.health
-
-# Check specific provider
-python -m lib.llm.health --provider openrouter
-
-# Custom timeout (default: 10s)
-python -m lib.llm.health --timeout 30
-
-# Export as JSON
-python -m lib.llm.health --json
-```
-
-The health check system:
-- Tests actual connectivity by making minimal LLM requests
-- Reports latency for each provider
-- Validates provider configuration and availability
-- Supports checking all providers or specific ones
-- Returns non-zero exit code if any provider is unhealthy (useful for CI/CD)
-
-### Performance Monitoring
-
-#### JSON Repair and Provider Performance
-
-```bash
-# View JSON repair patterns and statistics
-python tools/repair-monitor.py
-
-# View provider performance metrics
-python tools/repair-monitor.py --providers
-
-# View all reports (repair + performance)
-python tools/repair-monitor.py --all
-
-# Analyze specific workspace
-python tools/repair-monitor.py --workspace ~/projects/myapp
-
-# Export statistics as JSON
-python tools/repair-monitor.py --json
-```
-
-The monitoring dashboard provides:
-- JSON repair rate and method distribution
-- Repair patterns by provider, role, and model
-- Provider performance metrics (latency, success rate, cost)
-- Actionable recommendations for improving JSON mode prompts
-- Cost tracking and token usage statistics
-
-#### Agent Execution Profiling
-
-```bash
-# Analyze latest profile
-python tools/profile-report.py --latest
-
-# Analyze specific profile
-python tools/profile-report.py path/to/profile.json
-
-# Aggregate all profiles in workspace
-python tools/profile-report.py --workspace ~/projects/myapp --all
-
-# Export as JSON
-python tools/profile-report.py --latest --json
-
-# Hide execution tree
-python tools/profile-report.py --latest --no-tree
-```
-
-The profiling system:
-- Measures execution time for agent operations
-- Tracks nested operations (LLM calls, file I/O, git operations)
-- Generates statistics (count, total, avg, min, max duration)
-- Shows slowest operations
-- Displays execution tree with hierarchical timing
-- Supports aggregation across multiple runs
-- Profiles stored in `.agentleeops/profiles/`
-
-**Using profiler in code:**
-```python
-from lib.profiler import Profiler, profile
-
-# Context manager
-profiler = Profiler()
-with profiler.measure("operation_name", metadata="value"):
-    # Code to profile
-    pass
-
-# Decorator
-@profile("my_function")
-def my_function():
-    pass
-
-# Save profile
-profiler.save("profile.json")
-```
+Current full-suite baseline after Sprint 7: `353 passed`.
 
 ## Status
 
-AgentLeeOps is production-ready through Sprint 18 (LLM Provider Abstraction + Cleanup & Optimization complete). See `sprintPlan.md` for detailed progress tracking.
-
-**Current capabilities:**
-- Full 10-column Kanboard workflow
-- 6 agents (Architect, PM, Spawner, Test, Ralph, Governance) - all using LLM abstraction
-- Pluggable LLM provider system with role-based routing (Sprint 16-17)
-  - OpenRouter HTTP provider with Claude Sonnet 4
-  - OpenCode CLI provider with JSON repair (tested: gpt-5.2-codex)
-  - Gemini CLI provider with Gemini 3 support (tested: gemini-3-flash-preview)
-  - Configuration validation via `python -m lib.llm.doctor`
-  - Lazy provider validation (system starts with partial configs)
-  - Large prompt handling (stdin fallback for prompts >100KB)
-  - Prompt compression for very large inputs (Sprint 18)
-    - Smart compression strategies (whitespace, aggressive, extract)
-    - Automatic compression for messages >10KB
-    - Token savings estimation and logging
-- Ratchet governance with SHA256 hash verification
-- LLM syntax guards to prevent refusal injection
-- JSON repair for CLI output (trailing commas, unquoted keys, etc.)
-- Enhanced observability:
-  - Dynamic log field extraction (all LLM context in logs)
-  - JSON repair audit trail (metadata in logs/traces)
-  - Raw provider output in trace files
-  - Trace recording (`.agentleeops/traces/`)
-  - Monitoring dashboard for repair patterns and provider performance
-- Webhook and polling automation modes
+Single-card redesign Sprints 1-7 are implemented and validated.
+Sprint 8 (OpenCode workspace isolation hardening) remains tracked in `single-card-redesign-sprint-plan.md`.

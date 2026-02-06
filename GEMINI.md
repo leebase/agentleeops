@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-AgentLeeOps is a Python-based orchestration framework designed to manage high-discipline, multi-agent software development workflows. It integrates with **Kanboard** to enforce a strict 10-stage pipeline that governs the software lifecycle from idea to delivery.
+AgentLeeOps is a Python-based orchestration framework designed to manage high-discipline, multi-agent software development workflows. It integrates with **Kanboard** to enforce an 11-lane pipeline and also supports a CLI-first local lifecycle without Kanboard.
 
 The core philosophy revolves around:
 *   **The Ratchet Effect:** Progress is gated by human approval. Once a stage (Design, Tests, Plan) is approved, agents cannot regress without explicit permission.
@@ -30,10 +30,16 @@ The core philosophy revolves around:
     # Edit .env to set KANBOARD_TOKEN, etc.
     ```
 3.  **Initialize Board:**
-    Run the setup script to configure the 10-column Kanboard pipeline.
+    Run the setup script to configure the 11-column Kanboard pipeline.
     ```bash
     python setup-board.py
     ```
+
+4.  **Optional: Enable Single-Card Mode**
+    ```bash
+    export AGENTLEEOPS_SINGLE_CARD_MODE=1
+    ```
+    In this mode, Plan Approved no longer fans out child cards; lifecycle is synchronized to local `work-packages/task-<id>/` state and gated by artifact freshness.
 
 ### Execution Modes
 The system can be run in different modes depending on your needs:

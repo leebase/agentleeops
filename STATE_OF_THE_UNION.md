@@ -1,47 +1,54 @@
-# State of the Union (Feb 6, 2026)
+# State of the Union (February 6, 2026)
 
-## What’s Working
-- The core workflow is functional end‑to‑end: Design → Plan → Spawn → Tests → Ralph → Review.
-- `prd.json` format is corrected and spawner works.
-- Test generation now triggers correctly when tests are approved.
+## Executive Summary
 
-## Key Fixes Completed
-1. Tests Approved trigger
-   - `7. Tests Approved` now triggers `TEST_CODE_AGENT` (not just Governance).
-   - Files updated: `webhook_server.py`, `orchestrator.py`.
+Single-card redesign Sprints 1-7 are complete, validated, documented, and pushed to `master`.
+The platform now supports deterministic local lifecycle state, artifact freshness gating, dashboard output, CLI-first orchestration, migration utilities, and rollout guidance.
 
-2. Parent fan‑out for tests
-   - Moving the parent card to `7. Tests Approved` now fan‑outs to children and generates `tests/test_*.py` for each linked atomic story.
-   - Implemented in both webhook and orchestrator flows.
+## What Is Working
 
-3. Documentation updated
-   - `README.md`, `product-definition.md`, and `USER_STORY_WORKFLOW.md` reflect the correct Tests Approved behavior (test code generation + locking).
+- Work package bootstrap and schema validation (`manifest.yaml`).
+- Lifecycle transitions with immutable approval events and replay history.
+- Artifact hash indexing with stale/superseded detection.
+- Dashboard data + HTML rendering from lifecycle/artifact state.
+- Single-card orchestrator mode with local gating and fan-out bypass.
+- CLI-first lifecycle execution without Kanboard dependency.
+- External work item mapping import/export and adapter contract scaffolding.
+- Migration path from legacy workspace artifacts into work packages.
+- Transition hardening for partial-write cleanup and idempotent retries.
 
-4. Commit & push
-   - Commit: “Fix Tests Approved to generate test code”
-   - Branch: `feat/kanban-refactor`
-   - Pushed to origin.
+## Sprint Commit Trail (Sprints 3-7)
 
-## Current Kanboard State
-- Parent: `task/1` = “Data Contract Guard 3”.
-- Children exist and are linked (atomic‑01 → atomic‑13).
-- All children were moved back to Tests Draft to allow clean regeneration of test code.
+- `507eaa3` - Sprint 3: artifact integrity registry and stale detection
+- `c93df17` - Sprint 4: dashboard generation and auto-refresh
+- `3d94044` - Sprint 5: single-card adapter and orchestration gates
+- `5bc1c03` - Sprint 6: CLI-first orchestration and external mapping contract
+- `47a6145` - Sprint 7: migration utility, transition hardening, rollout playbook
 
-## What To Do Next
-1. Move parent `/task/1` to `7. Tests Approved`.
-   - This should auto‑generate `tests/test_*.py` for all linked children.
-2. Verify `tests/test_*.py` files exist in `/home/lee/projects/data-guard-3/tests/`.
-3. If any test generation fails (LLM syntax error), re‑move parent to Tests Approved to retry.
-4. Once all tests exist, move parent to Ralph Loop for batch implementation.
+## Validation Snapshot
 
-## Known Issues / Gotchas
-- Previous runs created only some test files because the trigger was wrong at the time.
-- One failure was logged due to invalid test code from the LLM (atomic‑07); retry should resolve.
+- Sprint 3 full suite: `338 passed`
+- Sprint 4 full suite: `341 passed`
+- Sprint 5 full suite: `345 passed`
+- Sprint 6 full suite: `349 passed`
+- Sprint 7 full suite: `353 passed`
 
-## Services
-- `webhook_server.py` and `orchestrator.py` were restarted in detached mode with network permissions.
-- Use `webhook_server.out` and `orchestrator.out` for live status.
+Live smoke outcomes included:
+- single-card Plan Approved flow with no child-card links created in single-card mode
+- CLI migration run producing a migration report and dashboard outputs
 
-## Workspace
-- Project dir: `/home/lee/projects/data-guard-3`
-- Key artifacts: `DESIGN.md`, `prd.json`, `tests/TEST_PLAN_*.md`, and (pending) `tests/test_*.py`.
+## Current Operating Guidance
+
+- Prefer single-card mode for new work:
+
+```bash
+export AGENTLEEOPS_SINGLE_CARD_MODE=1
+```
+
+- Keep Kanboard metadata contract stable (`dirname`, `context_mode`, `acceptance_criteria`).
+- Use `tools/workpackage.py` for local lifecycle, gate checks, mapping, and migration operations.
+
+## Remaining Tracked Item
+
+- Sprint 8 remains open: OpenCode workspace isolation bug hardening.
+- Interim mitigation remains valid: route active delivery through Codex CLI paths and avoid OpenCode for production flow until Sprint 8 completes.

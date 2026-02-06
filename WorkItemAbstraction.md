@@ -1,9 +1,25 @@
 # AgentLeeOps Work Item Provider Architecture
 
 **Date:** 2026-01-28
-**Status:** Architecture Design
+**Status:** Partially Implemented (Sprints 5-7)
 **Supersedes:** MultiKanban.md
 **Based on:** Code review feedback (codereview/kanbanRedesignFeedback.md)
+
+---
+
+## Implementation Status Update (Sprints 1-7)
+
+Implemented from this design:
+- `lib/workitem/protocol.py` and `lib/workitem/client.py`
+- `lib/workitem/providers/kanboard.py`
+- `lib/workitem/adapter_contract.py` (external adapter contract scaffold)
+- single-card lifecycle adapter in `lib/workpackage/adapter.py`
+- local CLI-first orchestration in `lib/workpackage/local_orchestrator.py`
+
+Still pending from full enterprise vision:
+- concrete Jira/ADO provider implementations
+- production-grade bidirectional sync beyond current mapping/import-export scaffold
+- rollout completion for remaining Sprint 8 workspace-isolation hardening
 
 ---
 

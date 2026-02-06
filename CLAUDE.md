@@ -91,10 +91,11 @@ Kanboard (Port 88) → Webhook Server → Orchestrator → Agents → ~/projects
 | 2. Design Draft | ARCHITECT_AGENT | `DESIGN.md` | `agents/architect.py` |
 | 3. Design Approved | GOVERNANCE_AGENT | Locks artifacts | `agents/governance.py` |
 | 4. Planning Draft | PM_AGENT | `prd.json` | `agents/pm.py` |
-| 5. Plan Approved | SPAWNER_AGENT | Child task cards | `agents/spawner.py` |
-| 6. Tests Draft | TEST_AGENT | `tests/test_*.py` | `agents/test_agent.py` |
-| 7. Tests Approved | GOVERNANCE_AGENT | Locks tests | `agents/governance.py` |
+| 5. Plan Approved | SPAWNER_AGENT | Legacy: child card fan-out; Single-card: no fan-out | `agents/spawner.py` |
+| 6. Tests Draft | TEST_AGENT | Test plan artifacts | `agents/test_agent.py` |
+| 7. Tests Approved | TEST_CODE_AGENT + GOVERNANCE | Test code generation + lock | `agents/test_code_agent.py`, `agents/governance.py` |
 | 8. Ralph Loop | RALPH_CODER | Source code | `agents/ralph.py` |
+| 9. Code Review | CODE_REVIEW_AGENT | Review artifacts | `agents/code_review.py` |
 
 ### Key Library Modules
 
@@ -263,4 +264,4 @@ python tools/profile-report.py --json       # JSON output
 - `webhook_server.py`: HTTP server for Kanboard webhook events
 - `setup-board.py`: One-time Kanboard column configuration
 - `product-definition.md`: Authoritative specification
-- `sprintPlan.md`: Sprint tracker for progress visibility
+- `single-card-redesign-sprint-plan.md`: Single-card redesign tracker (Sprints 1-8)

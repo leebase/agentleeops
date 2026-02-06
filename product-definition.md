@@ -1,77 +1,132 @@
-# AgentLeeOps — Product Definition v1.5 (Code Review Lane Edition)
+# AgentLeeOps - Product Definition v1.7 (Single-Card Lifecycle Edition)
 
 ## 1. Executive Summary
 
-**AgentLeeOps** is a single-user, approval-gated delivery system that turns a Story into tested, working code. It combines a **Kanban Control Plane** (Kanboard) with an **Agentic Loop** (OpenCode) to ensure AI speed without AI hallucinations.
+AgentLeeOps is an approval-gated delivery system that turns a story into tested code through deterministic lifecycle transitions, immutable approval evidence, and artifact integrity checks.
 
-## 2. The Core Philosophy
+The control plane can be:
+- Kanboard (webhook/polling automation), or
+- local CLI orchestration (`tools/workpackage.py`) without board dependency.
 
-*   **The Ratchet Effect (Governance):** Approval is not just a column; it is a cryptographic lock. Once artifacts (`DESIGN.md`, `tests/`) are approved by Lee, they become **immutable** to agents. Only Lee can unlock them.
-*   **The Double-Blind Rule:** The Agent writing the code (**Ralph**) is never the same Agent that wrote the tests.
-*   **Test Integrity:** Ralph is technically prevented from modifying tests. A "Green Bar" is only valid if the test file hash matches the approved version.
-*   **Artifacts over Chat:** We do not rely on chat logs. We rely on durable files.
+## 2. Core Philosophy
 
-## 3. The 11-Step Workflow (State Machine)
+- Ratchet governance: approvals create immutable constraints.
+- Double-blind testing: implementation and test authorship stay separated.
+- Test integrity: approved tests are not mutated during coding flow.
+- Artifacts over chat: durable state lives in files, not transient conversation.
+- Idempotent recovery: retries are safe after partial failures.
 
-| # | Column | Owner | Artifact | Governance Action |
+## 3. Lifecycle State Machine (11 Steps)
+
+| # | Column / Stage | Owner | Primary Artifact | Gate / Action |
 |---|---|---|---|---|
-| **1** | Inbox | Lee | Story Card | - |
-| **2** | Design Draft | Architect | `DESIGN.md` | Agent can overwrite |
-| **3** | **Design Approved** | Lee | **(Gate)** | **LOCK** `DESIGN.md` |
-| **4** | Planning Draft | PM | `prd.json` | Agent can overwrite |
-| **5** | **Plan Approved** | Lee | **(Gate)** | **LOCK** `prd.json` + **SPAWN** Children |
-| **6** | Tests Draft | Test Agent | `tests/TEST_PLAN_*.md` | Agent can overwrite |
-| **7** | **Tests Approved** | Lee | **(Gate)** | **GENERATE** `tests/test_*.py` then **LOCK** `tests/*.py` |
-| **8** | Ralph Loop | Ralph | `src/` | **VERIFY** Test Hash + **BAN** Test Edits |
-| **9** | Code Review | Review Agent | `reviews/CODE_REVIEW_REPORT.json`, `reviews/CODE_REVIEW_NEXT_STEPS.md` | **REVIEW GATE** (fail blocks progression) |
-| **10** | Final Review | Lee | PR/Diff + review artifacts | Manual Merge |
-| **11** | Done | System | Archived | - |
+| 1 | Inbox | Lee | Story card | Intake |
+| 2 | Design Draft | Architect | `DESIGN.md` | Draft generated |
+| 3 | Design Approved | Lee | Approved design | Lock/review gate |
+| 4 | Planning Draft | PM | `prd.json` | Draft generated |
+| 5 | Plan Approved | Lee | Approved plan | Lock/review gate |
+| 6 | Tests Draft | Test Agent | `TEST_PLAN_*.md` | Draft generated |
+| 7 | Tests Approved | Lee | `test_*.py` | Generate + lock tests |
+| 8 | Ralph Loop | Ralph | `src/` changes | Implement against locked tests |
+| 9 | Code Review | Review Agent | Review reports | Review gate |
+| 10 | Final Review | Lee | Final diff/artifacts | Human approval |
+| 11 | Done | System | Archived state | Completed |
 
-## 4. Governance & Safety Mechanisms
+## 4. Work Package Model (Sprint 1)
 
-### 4.1 The Ratchet System
-A local manifest `.agentleeops/ratchet.json` tracks the approval state of critical files.
-- **Locked:** File cannot be modified by any agent.
-- **Unlocked:** File is in a "Draft" column.
-- **Enforcement:** `workspace.write_file()` checks this manifest before IO operations.
+Each story maps to a local package:
 
-### 4.2 Ralph's Straitjacket
-To prevent "Cheating" (making tests pass by deleting assertions):
-1.  **Staging Restriction:** Ralph cannot run `git add .`. He must add specific source paths.
-2.  **Diff Check:** Before commit, the system runs `git diff --cached --name-only`. If any file in `tests/` is present, the operation aborts.
+```text
+work-packages/task-<id>/
+  manifest.yaml
+  approvals/
+  artifacts/{design,planning,tests,implementation}
+  dashboard/{dashboard.json,dashboard.html}
+```
 
-### 4.3 Fan-Out Flood Control
-The Spawner Agent enforces a hard limit (default: 20) on the number of child cards generated from a single `prd.json` to prevent runaway API calls or cost explosions.
+`manifest.yaml` is the canonical local state contract.
 
-### 4.4 LLM Syntax Guard
-To prevent "LLM Refusal Injection" (model responds with prose instead of code):
-1.  **Python Validation:** All code is validated with `ast.parse()` before writing to disk.
-2.  **JSON Validation:** All JSON is validated with `json.loads()` before writing.
-3.  **Rejection & Retry:** Invalid output is rejected and the agent retries (up to MAX_RETRIES).
-4.  **Implementation:** `lib/syntax_guard.py` provides `safe_extract_python()` and `safe_extract_json()`.
+## 5. Lifecycle + Approval Events (Sprint 2)
 
-### 4.5 Agent State Tags and Retry Unblocking
-The orchestrator and webhook server track execution state with task tags and metadata:
-- **Started tags:** e.g., `design-started`, `planning-started`, `spawning-started`, `tests-started`, `coding-started`
-- **Completed tags:** e.g., `design-generated`, `planning-generated`, `spawned`, `tests-generated`, `coding-complete`
-- **Failed tags:** e.g., `design-failed`, `planning-failed`, `spawning-failed`, `tests-failed`, `coding-failed`
+Transitions are deterministic:
+- Forward movement is one stage at a time.
+- Rollback/reopen to prior stages is supported.
+- Every transition records immutable event JSON under `approvals/`.
+- Replay/history is available for auditing.
 
-Retry behavior is deterministic:
-1. On failure, the system removes the `*-started` tag and adds `*-failed`.
-2. On success, the system adds `*-complete` and clears stale `*-failed`.
-3. If legacy/stale state has both `*-started` and `*-failed`, the system auto-clears `*-started` so retries can proceed without manual cleanup.
+## 6. Artifact Integrity + Freshness (Sprint 3)
 
-## 5. The "Context Mode"
+Artifacts are indexed and hashed (SHA256) with explicit states:
+- `draft`
+- `approved`
+- `stale`
+- `superseded`
 
-| Mode | Trigger | Agent Behavior |
-| --- | --- | --- |
-| **NEW** | `context_mode: NEW` | `mkdir <dirname>`, `git init`, scaffolding. |
-| **FEATURE** | `context_mode: FEATURE` | Uses existing repo, creates `feat/<story-id>` branch. |
+Freshness is recomputed after transitions and artifact refresh operations.
 
-## 6. Technical Stack
+## 7. Dashboard Output (Sprint 4)
 
-- **Control Plane:** Kanboard (Docker on Port 88).
-- **Orchestrator:** Python Script (`orchestrator.py`) polling Port 88.
-- **Agent Architecture:** Role-based Agents using `lib.llm` abstraction.
-- **LLM Providers:** Pluggable (OpenRouter, OpenCode CLI, Gemini CLI) via `config/llm.yaml`.
-- **Verification:** pytest (Backend).
+Canonical dashboard artifacts are generated locally:
+- `dashboard/dashboard.json`
+- `dashboard/dashboard.html`
+
+Dashboard includes stage status, approval history, artifact states, and local artifact links.
+
+## 8. Single-Card Orchestration Integration (Sprint 5)
+
+Feature flag:
+
+```bash
+AGENTLEEOPS_SINGLE_CARD_MODE=1
+```
+
+Behavior:
+- Kanboard lane movement syncs to local lifecycle.
+- Spawner fan-out is disabled in this mode.
+- Agent execution is gated by local artifact health.
+
+Legacy multi-card flow remains supported when the flag is off.
+
+## 9. CLI-First + External Adapter Readiness (Sprint 6)
+
+All core lifecycle behavior is callable locally via CLI commands:
+- init/validate/transition/sync-stage
+- gate/refresh-artifacts/refresh-dashboard
+- external mapping (`map-add`, `map-export`, `map-import`)
+
+External provider readiness includes:
+- adapter contract in `lib/workitem/adapter_contract.py`
+- external reference persistence in work package manifest
+
+## 10. Migration + Hardening (Sprint 7)
+
+Migration:
+- `migrate-workspace` imports legacy workspace artifacts into work packages.
+- migration report emitted to `migration/migration-report.json`.
+
+Hardening:
+- atomic manifest write behavior
+- transition failure cleanup for pending event files
+- same-stage retry idempotency
+- phased rollout and rollback playbook documented
+
+## 11. Safety and Governance Mechanisms
+
+- Ratchet lock enforcement remains mandatory.
+- Task tag state machine (`started`, `completed`, `failed`) enables deterministic retries.
+- Artifact gates prevent forward progress when required approved artifacts are stale or missing.
+- Human approvals remain authoritative at all gate columns.
+
+## 12. Technical Stack
+
+- Control plane: Kanboard JSON-RPC (optional in CLI-first mode)
+- Orchestration: `orchestrator.py` + `webhook_server.py`
+- Work package services: `lib/workpackage/*`
+- Work item abstraction: `lib/workitem/*`
+- LLM routing/providers: `lib/llm/*` with role-based config
+- Validation: pytest test suite
+
+## 13. Current Product Status
+
+- Sprints 1-7 of the single-card redesign are complete and validated.
+- Sprint 8 (OpenCode workspace isolation bug hardening) remains open and tracked in `single-card-redesign-sprint-plan.md`.
